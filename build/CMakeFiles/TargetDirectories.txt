@@ -1,3 +1,0 @@
-D:/GH/hyperchild/build/CMakeFiles/hyperchild.dir
-D:/GH/hyperchild/build/CMakeFiles/edit_cache.dir
-D:/GH/hyperchild/build/CMakeFiles/rebuild_cache.dir
