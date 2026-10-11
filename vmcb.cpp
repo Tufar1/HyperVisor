@@ -82,8 +82,8 @@ bool SetupVMCB(){
 	PHYSICAL_ADDRESS maxAddr;
 	maxAddr.QuadPart = MAXULONG64;
 
-	void* msrpm = MmAllocateContiguousMemory(2 * PAGE_SIZE, maxAddr); // 8 KB
-	void* iopm  = MmAllocateContiguousMemory(3 * PAGE_SIZE, maxAddr); // 12 KB
+	void* msrpm = MmAllocateContiguousMemory(2 * PAGE_SIZE, maxAddr);
+	void* iopm  = MmAllocateContiguousMemory(3 * PAGE_SIZE, maxAddr);
 
 	RtlZeroMemory(msrpm, 2 * PAGE_SIZE);
 	RtlZeroMemory(iopm, 3 * PAGE_SIZE);	
@@ -121,11 +121,11 @@ bool SetupVMCB(){
 	int i = 0;
 
 	// MOV EAX, 0x80000001
-	code[i++] = 0xB8;             // opcode pro MOV EAX, imm32
-	code[i++] = 0x01;             // nejnižší bajt 0x80000001
+	code[i++] = 0xB8;
+	code[i++] = 0x01;
 	code[i++] = 0x00;
 	code[i++] = 0x00;
-	code[i++] = 0x80;             // nejvyšší bajt
+	code[i++] = 0x80;
 
 	// CPUID
 	code[i++] = 0x0F;
@@ -135,7 +135,7 @@ bool SetupVMCB(){
 	code[i++] = 0x0F;
 	code[i++] = 0xA2;
 	
-	// JMP $ (nekonečná smyčka)
+	// JMP $
 	code[i++] = 0xEB;
 	code[i++] = 0xFE;
 

@@ -41,21 +41,21 @@ struct GuestContext {
 
 struct VmcbControlArea {
     uint8_t  reserved1[0xC];           // 0x00
-    uint32_t interceptMisc1;           // 0x0C - obsahuje CPUID intercept (bit 18), SHUTDOWN (bit 31)
-    uint32_t interceptMisc2;           // 0x10 - obsahuje VMRUN intercept (bit 0)
+    uint32_t interceptMisc1;           // 0x0C
+    uint32_t interceptMisc2;           // 0x10
     uint8_t  reserved2[0x2C];          // 0x14 - 0x3F
     uint64_t iopmBasePA;               // 0x40
     uint64_t msrpmBasePA;              // 0x48
     uint8_t  reserved3[0x08];          // 0x50
-    uint32_t guestASID;                // 0x58 (spodní 32 bitů), horní = TLB_CONTROL atd.
+    uint32_t guestASID;                // 0x58
     uint32_t tlbControl;
     uint8_t  reserved4[0x10];          // 0x60 - 0x77
     uint64_t exitCode;                 // 0x70
     uint64_t exitInfo1;                // 0x78
     uint64_t exitInfo2;                // 0x80
     uint8_t  reserved6[0x40];          // 0x88 - 0xC7
-    uint64_t nRIP;                     // 0xC8 - Next sequential instruction pointer
-    uint8_t  reserved5[0x330];         // 0xD0 - doplnění do 0x400
+    uint64_t nRIP;                     // 0xC8
+    uint8_t  reserved5[0x330];         // 0xD0
 };
 static_assert(sizeof(VmcbControlArea) == 0x400, "Control Area size mismatch");
 
@@ -66,7 +66,7 @@ struct VmcbStateArea {
     VmcbSegment ds;                    // 0x430
     VmcbSegment fs;                    // 0x440
     VmcbSegment gs;                    // 0x450
-    VmcbSegment gdtr;                  // 0x460 (selector/attrib reserved, SBZ)
+    VmcbSegment gdtr;                  // 0x460
     VmcbSegment idtr;                  // 0x470
     VmcbSegment ldtr;                  // 0x480
     VmcbSegment tr;                    // 0x490
@@ -78,8 +78,8 @@ struct VmcbStateArea {
     uint64_t    cr4;                   // 0x548
     uint64_t    cr3;                   // 0x550
     uint64_t    cr0;                   // 0x558
-    uint64_t    dr7;                   // 0x560  (opraveno)
-    uint64_t    dr6;                   // 0x568  (opraveno)
+    uint64_t    dr7;                   // 0x560
+    uint64_t    dr6;                   // 0x568
     uint64_t    rflags;                // 0x570
     uint64_t    rip;                   // 0x578
     uint8_t     reserved4[0x58];       // 0x580 - 0x5D7
