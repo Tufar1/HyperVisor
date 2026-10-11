@@ -64,6 +64,10 @@ void SetupVirtualization(void* ctx){
 		
 	VMCB = reinterpret_cast<Vmcb*>(MmAllocateContiguousMemory(0x1000, MaxAddress));
 	auto HostState = MmAllocateContiguousMemory(0x1000, MaxAddress);
+	
+	if(!VMCB || !HostState)
+		return;
+
 	RtlZeroMemory(VMCB, 0x1000);
 	RtlZeroMemory(HostState, 0x1000);
 	
@@ -75,6 +79,11 @@ void SetupVirtualization(void* ctx){
 	
 	//setup custom stack
 	auto CustomStack = reinterpret_cast<uint64_t>(MmAllocateContiguousMemory(0x5000, MaxAddress));	
+	
+	if(!CustomStack){
+		return;
+	}
+
 	auto CustomRSP = reinterpret_cast<uint64_t>(CustomStack) + 0x5000;	
 	
 	DbgPrintEx(0, 0, "ExitCode Before: %i\n", VMCB->control.exitCode);

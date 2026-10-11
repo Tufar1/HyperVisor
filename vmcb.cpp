@@ -66,12 +66,11 @@ extern "C" int HandleExit(GuestContext* ctx) {
 		if((ctx->rcx & (1 << 2)) == 0)
 			DbgPrintEx(0, 0, "(Fake) SVM Not available\n");
 		
-		VMCB->state.rip += VMCB->control.nRIP;
+		VMCB->state.rip = VMCB->control.nRIP;
 	}
 	return 1;
 }
 
-//VMRUN is available only at CPL 0
 bool SetupVMCB(){
 	//Control Area
 	
@@ -139,7 +138,7 @@ bool SetupVMCB(){
 	code[i++] = 0xEB;
 	code[i++] = 0xFE;
 
-uint64_t rflags = __readeflags();
+	uint64_t rflags = __readeflags();
 
 	rflags &= ~(1ULL << 9);	
 	VMCB->state.rflags = rflags;
