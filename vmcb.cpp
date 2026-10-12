@@ -46,40 +46,44 @@ extern "C" int HandleExit(GuestContext* ctx) {
 	auto ExitCode = VMCB->control.exitCode;
 	auto Info1 = VMCB->control.exitInfo1;
 	auto Info2 = VMCB->control.exitInfo2;
-  DbgPrintEx(0, 0, "ExitCode: 0x%llX, info1: 0x%llX, info2: 0x%llX\n", ExitCode, Info1, Info2);
-	
-	if(ExitCode == 0x72){
-		DbgPrintEx(0,0,"CPUID intercepted\n");
-	
-		DbgPrintEx(0,0,"From Guest: [rax] 0x%llX [rbx] 0x%llX [rcx] 0x%llX [rdx] 0x%llX\n", VMCB->state.rax, ctx->rbx, ctx->rcx, ctx->rdx);
+  
+	DbgPrintEx(0, 0, "ExitCode: 0x%llX, info1: 0x%llX, info2: 0x%llX\n", ExitCode, Info1, Info2);
 
-    int regs[4];
-    __cpuidex(regs, (int)VMCB->state.rax, (int)ctx->rcx);
-		
-		regs[2] &= ~(1 << 2);
-		
-  	VMCB->state.rax = (uint32_t)regs[0];
-    ctx->rbx = (uint32_t)regs[1];
-    ctx->rcx = (uint32_t)regs[2];
-    ctx->rdx = (uint32_t)regs[3];
-
-		if((ctx->rcx & (1 << 2)) == 0)
-			DbgPrintEx(0, 0, "(Fake) SVM Not available\n");
-		
-		VMCB->state.rip = VMCB->control.nRIP;
+	if(ExitCode == 0x7F){
+		DbgPrintEx(0,0,"RIP=%llX\n", VMCB->state.rip);
+		DbgPrintEx(0,0, "GuestContext: R15=%llX R14=%llX R13=%llX R12=%llX R11=%llX R10=%llX R9=%llX R8=%llX RBP=%llX RDI=%llX RSI=%llX RDX=%llX RCX=%llX RBX=%llX RAX=%llx RSP=%llX\n", ctx->r15, ctx->r14, ctx->r13, ctx->r12, ctx->r11, ctx->r10, ctx->r9, ctx->r8, ctx->rbp, ctx->rdi, ctx->rsi, ctx->rdx, ctx->rcx, ctx->rbx, VMCB->state.rax, VMCB->state.rsp);	
 	}
+
+	if(VMCB->control.nRIP)
+		VMCB->state.rip = VMCB->control.nRIP;
+
 	return 1;
 }
 
 bool SetupVMCB(){
-	//Control Area
-	
-  VMCB->control.interceptMisc1 |= (1u << 18);  // CPUID intercept
-  VMCB->control.interceptMisc2 |= (1u << 0);   // VMRUN intercept
-	VMCB->control.guestASID = 1;
-
+	//Prepare memory
 	PHYSICAL_ADDRESS maxAddr;
 	maxAddr.QuadPart = MAXULONG64;
+
+	VMCB = reinterpret_cast<Vmcb*>(MmAllocateContiguousMemory(0x1000, maxAddr));
+	if(!VMCB)
+		return false;
+	RtlZeroMemory(VMCB, 0x1000);
+	PHYSICAL_ADDRESS VMCBPA = MmGetPhysicalAddress(VMCB);
+
+	//setup custom stack
+	auto CustomStack = reinterpret_cast<uint64_t>(MmAllocateContiguousMemory(0x5000, maxAddr));	
+	
+	if(!CustomStack)
+		return false;
+
+	auto CustomRSP = reinterpret_cast<uint64_t>(CustomStack) + 0x5000;		
+
+	//Control Area	
+	VMCB->control.interceptMisc1 |= (1u << 31);
+  VMCB->control.interceptMisc1 |= (1u << 18);
+  VMCB->control.interceptMisc2 |= (1u << 0);
+	VMCB->control.guestASID = 1;
 
 	void* msrpm = MmAllocateContiguousMemory(2 * PAGE_SIZE, maxAddr);
 	void* iopm  = MmAllocateContiguousMemory(3 * PAGE_SIZE, maxAddr);
@@ -107,6 +111,7 @@ bool SetupVMCB(){
 
 	auto cs = ReadCS();
 	auto ss = ReadSS();
+
 	VmcbSegment csSeg = GetSegmentFromGDT(cs);
 	VmcbSegment ssSeg = GetSegmentFromGDT(ss);
 	
@@ -114,29 +119,6 @@ bool SetupVMCB(){
 	ReadGDT(&gdtr);
 	GDTR idtr;
 	ReadIDT(&idtr);
-
-	void* guestCode = MmAllocateContiguousMemory(PAGE_SIZE, maxAddr);
-	uint8_t* code = (uint8_t*)guestCode;
-	int i = 0;
-
-	// MOV EAX, 0x80000001
-	code[i++] = 0xB8;
-	code[i++] = 0x01;
-	code[i++] = 0x00;
-	code[i++] = 0x00;
-	code[i++] = 0x80;
-
-	// CPUID
-	code[i++] = 0x0F;
-	code[i++] = 0xA2;
-	
-	// CPUID
-	code[i++] = 0x0F;
-	code[i++] = 0xA2;
-	
-	// JMP $
-	code[i++] = 0xEB;
-	code[i++] = 0xFE;
 
 	uint64_t rflags = __readeflags();
 
@@ -165,8 +147,9 @@ bool SetupVMCB(){
   VMCB->state.dr6 = dr6;
   VMCB->state.dr7 = dr7;
 
-	VMCB->state.rip = (uint64_t)guestCode;
-	VMCB->state.rsp = rsp;
+	VMCB->state.rax = 1;
+	VMCB->state.rip = reinterpret_cast<uint64_t>(_ReturnAddress());
+	VMCB->state.rsp = rsp + 0x98;
 
 	VMCB->state.efer = EFER;
 
@@ -174,11 +157,14 @@ bool SetupVMCB(){
 
 	DumpVMCB(VMCB, 0x000, 0x400);   // Control Area
 	DumpVMCB(VMCB, 0x400, 0x700);   // State Save Area	
+	
+	DbgPrintEx(0,0,"RIP=%llX\n", VMCB->state.rip);
 
-	int regs[4];
-	__cpuid(regs, 0x80000001);
+	RunLoop(VMCBPA.QuadPart, CustomRSP);
+	
+	//This should never be executed
+ 
+	__debugbreak();
 
-  DbgPrintEx(0, 0, "CPUID eax=0x%X ebx=0x%X ecx=0x%X edx=0x%X\n",regs[0], regs[1], regs[2], regs[3]);	
-
-  return true;
+	return true;
 }

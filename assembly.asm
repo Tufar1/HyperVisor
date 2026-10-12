@@ -4,6 +4,17 @@ EXTERN HandleExit:PROC
 RunLoop PROC
 	; rcx = VMCBPA, rdx = CustomRSP
   ; args
+	add rsp, 98h
+	
+	pop rbx
+	pop rdi
+	pop rsi
+	pop r12
+	pop r13
+	pop r14
+	pop r15
+	pop rbp
+
 	mov r11, rcx
 	mov rsp, rdx
 START:

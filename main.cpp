@@ -1,12 +1,5 @@
-#include <ntddk.h>
-#include <intrin.h>
-#include <ntstatus.h>
-
 #include "vmcb.h"
 #include "wdm.h"
-
-extern "C" void RunLoop(uint64_t VMCBPA, uint64_t CustomRSP);
-extern "C" void WriteMSR(uint32_t msr, uint64_t value);
 
 void DriverUnload(DRIVER_OBJECT* driver_object) {
 	UNREFERENCED_PARAMETER(driver_object);
@@ -62,53 +55,30 @@ void SetupVirtualization(void* ctx){
 	PHYSICAL_ADDRESS MaxAddress;
 	MaxAddress.QuadPart = MAXULONG;
 		
-	VMCB = reinterpret_cast<Vmcb*>(MmAllocateContiguousMemory(0x1000, MaxAddress));
 	auto HostState = MmAllocateContiguousMemory(0x1000, MaxAddress);
 	
-	if(!VMCB || !HostState)
+	if(!HostState)
 		return;
 
-	RtlZeroMemory(VMCB, 0x1000);
 	RtlZeroMemory(HostState, 0x1000);
 	
-	PHYSICAL_ADDRESS VMCBPA = MmGetPhysicalAddress(VMCB);
 	PHYSICAL_ADDRESS HostStatePA = MmGetPhysicalAddress(HostState);
 	
 	//write to HSAVE msr
 	WriteMSR(0xC0010117, HostStatePA.QuadPart);
 	
-	//setup custom stack
-	auto CustomStack = reinterpret_cast<uint64_t>(MmAllocateContiguousMemory(0x5000, MaxAddress));	
-	
-	if(!CustomStack){
-		return;
-	}
-
-	auto CustomRSP = reinterpret_cast<uint64_t>(CustomStack) + 0x5000;	
-	
-	DbgPrintEx(0, 0, "ExitCode Before: %i\n", VMCB->control.exitCode);
-
 	SetupVMCB();
-
-	RunLoop(VMCBPA.QuadPart, CustomRSP);
-	
-	KeRevertToUserAffinityThread();
-	
-	//Turn off svme 
-	EFER = __readmsr(0xC0000080);
-	EFER &= ~(1ULL << 12);
-	WriteMSR(0xC0000080, EFER);
-
-	PsTerminateSystemThread(STATUS_SUCCESS);
 }
 
 NTSTATUS DriverEntry(DRIVER_OBJECT* driver_object, UNICODE_STRING*) {
 	DbgPrintEx(0, 0, "Hello from driver!\n");
 	driver_object->DriverUnload = DriverUnload;
 
-	HANDLE OutHandle;
-	PsCreateSystemThread(&OutHandle, GENERIC_ALL, nullptr, nullptr, nullptr, SetupVirtualization, nullptr);
-	ZwClose(OutHandle);
+	//HANDLE OutHandle;
+	//PsCreateSystemThread(&OutHandle, GENERIC_ALL, nullptr, nullptr, nullptr, SetupVirtualization, nullptr);
+	//ZwClose(OutHandle);
 	
+	SetupVirtualization(nullptr);
+
 	return STATUS_SUCCESS;
 }

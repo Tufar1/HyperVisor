@@ -4,6 +4,7 @@
 #include <ntddk.h>
 
 extern "C" void WriteMSR(uint32_t msr, uint64_t value);
+extern "C" void RunLoop(uint64_t VMCBPA, uint64_t CustomRSP);
 
 extern "C" uint16_t ReadCS();
 extern "C" uint16_t ReadSS();
