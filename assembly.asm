@@ -39,7 +39,7 @@ START:
 
 	mov rcx, rsp
 	mov rdx, [rsp + 280h]
-	mov r8, [rsp + 288h]
+	mov r8, [rsp + 278h]
 
 	sub rsp, 28h
 	call HandleExit

@@ -110,7 +110,7 @@ struct alignas(0x1000) GuestState {
 
     CONTEXT oldContext;  // 0x1B00
     PHYSICAL_ADDRESS GuestVmcbPA; // 0x1FD0
-    PHYSICAL_ADDRESS HostVmcbPA;  // 0x1FD8
+    uint64_t HostVmcbPA;  // 0x1FD8
 
     Vmcb* Vmcb;           // 0x1FE0
     bool virtualised;     // 0x1FE8

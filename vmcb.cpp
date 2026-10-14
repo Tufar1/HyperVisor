@@ -43,8 +43,8 @@ VmcbSegment GetSegmentFromGDT(uint16_t selector) {
   return seg;
 }
 
-extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, PHYSICAL_ADDRESS HostStatePA) {
-	svm_vmload(reinterpret_cast<void*>(HostStatePA.QuadPart));
+extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
+	svm_vmload(reinterpret_cast<void*>(HostStatePA));
 
 	auto ExitCode = Vmcb->control.exitCode;
 	auto Info1 = Vmcb->control.exitInfo1;
@@ -143,15 +143,6 @@ bool SetupVMCB(GuestState* GS){
 
 	DumpVMCB(GS->Vmcb, 0x000, 0x400);   // Control Area
 	DumpVMCB(GS->Vmcb, 0x400, 0x700);   // State Save Area	
-
-	GS->virtualised = true;
-
-	svm_vmsave(reinterpret_cast<void*>(GS->GuestVmcbPA.QuadPart));
-	RunLoop(&GS->GuestVmcbPA);
-	
-	//This should never be executed
- 
-	__debugbreak();
 
 	return true;
 }
