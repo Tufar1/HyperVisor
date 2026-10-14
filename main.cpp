@@ -78,20 +78,19 @@ bool SetupVirtualization(void* ctx){
 	//write to HSAVE msr
 	WriteMSR(0xC0010117, HostStatePA.QuadPart);
 	
-	
-	SetupVMCB(&GS);
 	svm_vmsave(reinterpret_cast<void*>(HostStatePA.QuadPart));
-	svm_vmsave(reinterpret_cast<void*>(GS.GuestVmcbPA.QuadPart));
 	RtlCaptureContext(&GS.oldContext);
-
-	__debugbreak();
 	
 	if(GS.virtualised){
 		__debugbreak();
-		return true; //This returns to 0x18??
+		return true;
 	}
 
+	SetupVMCB(&GS);
 	GS.virtualised = true;	
+	
+	svm_vmsave(reinterpret_cast<void*>(GS.GuestVmcbPA.QuadPart));
+	
 	RunLoop(&GS.GuestVmcbPA);
 
 	//This should never be executed

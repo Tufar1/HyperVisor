@@ -51,11 +51,11 @@ extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
 	auto Info2 = Vmcb->control.exitInfo2;
   
 	DbgPrintEx(0, 0, "ExitCode: 0x%llX, info1: 0x%llX, info2: 0x%llX\n", ExitCode, Info1, Info2);
-
-	//if(ExitCode == 0x7F){
-		//DbgPrintEx(0,0,"RIP=%llX\n", Vmcb->state.rip);
-		//DbgPrintEx(0,0, "GuestContext: R15=%llX R14=%llX R13=%llX R12=%llX R11=%llX R10=%llX R9=%llX R8=%llX RBP=%llX RDI=%llX RSI=%llX RDX=%llX RCX=%llX RBX=%llX RAX=%llx RSP=%llX\n", ctx->r15, ctx->r14, ctx->r13, ctx->r12, ctx->r11, ctx->r10, ctx->r9, ctx->r8, ctx->rbp, ctx->rdi, ctx->rsi, ctx->rdx, ctx->rcx, ctx->rbx, Vmcb->state.rax, Vmcb->state.rsp);	
-	//}
+		DbgPrintEx(0,0,"RIP=%llX\n", Vmcb->state.rip);
+	if(ExitCode == 0x7F){
+		DbgPrintEx(0,0,"RIP=%llX\n", Vmcb->state.rip);
+		DbgPrintEx(0,0, "GuestContext: R15=%llX R14=%llX R13=%llX R12=%llX R11=%llX R10=%llX R9=%llX R8=%llX RBP=%llX RDI=%llX RSI=%llX RDX=%llX RCX=%llX RBX=%llX RAX=%llx RSP=%llX\n", ctx->r15, ctx->r14, ctx->r13, ctx->r12, ctx->r11, ctx->r10, ctx->r9, ctx->r8, ctx->rbp, ctx->rdi, ctx->rsi, ctx->rdx, ctx->rcx, ctx->rbx, Vmcb->state.rax, Vmcb->state.rsp);	
+	}
 
 	if(Vmcb->control.nRIP)
 		Vmcb->state.rip = Vmcb->control.nRIP;
