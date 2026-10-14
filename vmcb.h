@@ -1,8 +1,7 @@
 #pragma once
+#include <ntddk.h>
 #include <cstdint>
 #include <intrin.h>
-#include <ntddk.h>
-#include <ntdef.h>
 
 extern "C" void WriteMSR(uint32_t msr, uint64_t value);
 extern "C" void RunLoop(uint64_t VMCBPA, uint64_t CustomRSP);
@@ -21,6 +20,9 @@ extern "C" uint64_t ReadDR7();
 extern "C" uint64_t ReadRSP();
 
 extern "C" void svm_vmsave(void* VMCBPA);
+
+extern "C" NTSYSAPI VOID NTAPI RtlCaptureContext(_Out_ PCONTEXT ContextRecord);
+extern "C" NTSYSAPI VOID NTAPI RtlRestoreContext(_In_ PCONTEXT ContextRecord, _Out_ _EXCEPTION_RECORD *ExceptionRecord);
 
 #pragma pack(push, 1)
 struct GDTR {

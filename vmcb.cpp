@@ -138,7 +138,6 @@ bool SetupVMCB(PHYSICAL_ADDRESS VMCBPA){
   VMCB->state.dr6 = dr6;
   VMCB->state.dr7 = dr7;
 
-	VMCB->state.rax = 1;
 	VMCB->state.rip = reinterpret_cast<uint64_t>(_ReturnAddress());
 	VMCB->state.rsp = reinterpret_cast<uint64_t>(_AddressOfReturnAddress()) + 0x8; //0x8 simulates pop
 
@@ -149,8 +148,7 @@ bool SetupVMCB(PHYSICAL_ADDRESS VMCBPA){
 	DumpVMCB(VMCB, 0x000, 0x400);   // Control Area
 	DumpVMCB(VMCB, 0x400, 0x700);   // State Save Area	
 	
-	DbgPrintEx(0,0,"RIP=%llX\n", VMCB->state.rip);
-
+	svm_vmsave(reinterpret_cast<void*>(VMCBPA.QuadPart));
 	RunLoop(VMCBPA.QuadPart, CustomRSP);
 	
 	//This should never be executed

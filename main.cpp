@@ -1,5 +1,4 @@
 #include "vmcb.h"
-#include "wdm.h"
 
 void DriverUnload(DRIVER_OBJECT* driver_object) {
 	UNREFERENCED_PARAMETER(driver_object);
@@ -76,10 +75,13 @@ bool SetupVirtualization(void* ctx){
 	WriteMSR(0xC0010117, HostStatePA.QuadPart);
 	
 	svm_vmsave(reinterpret_cast<void*>(HostStatePA.QuadPart));
-	svm_vmsave(reinterpret_cast<void*>(VMCBPA.QuadPart));
-
+	__debugbreak();
+	
+	CONTEXT oldContext{};
+	RtlCaptureContext(&oldContext);
 	SetupVMCB(VMCBPA);
-
+	RtlRestoreContext(&oldContext, nullptr);
+	
 	return true;	
 }
 
