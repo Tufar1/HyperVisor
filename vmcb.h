@@ -2,9 +2,10 @@
 #include <ntddk.h>
 #include <cstdint>
 #include <intrin.h>
+#include <ntdef.h>
 
 extern "C" void WriteMSR(uint32_t msr, uint64_t value);
-extern "C" void RunLoop(uint64_t VMCBPA, uint64_t CustomRSP);
+extern "C" void RunLoop(CONTEXT* oldContext, uint64_t CustomRSP, uint64_t VmcbPA);
 
 extern "C" uint16_t ReadCS();
 extern "C" uint16_t ReadSS();
@@ -73,8 +74,8 @@ struct VmcbStateArea {
     VmcbSegment fs;                    // 0x440
     VmcbSegment gs;                    // 0x450
     VmcbSegment gdtr;                  // 0x460
-    VmcbSegment idtr;                  // 0x470
-    VmcbSegment ldtr;                  // 0x480
+    VmcbSegment ldtr;                  // 0x470
+    VmcbSegment idtr;                  // 0x480
     VmcbSegment tr;                    // 0x490
     uint8_t     reserved1[0x2B];       // 0x4A0 - 0x4CA
     uint8_t     cpl;                   // 0x4CB
@@ -99,6 +100,12 @@ struct Vmcb {
     VmcbStateArea   state;
 };
 
+struct GuestState{
+	bool virtualised = false;
+	CONTEXT oldContext;
+	PHYSICAL_ADDRESS GuestVmcbPA;	
+};
+
 inline Vmcb* VMCB;
 inline PHYSICAL_ADDRESS MaxAddress {.QuadPart = MAXLONGLONG};
-bool SetupVMCB(PHYSICAL_ADDRESS VMCBPA);
+bool SetupVMCB(GuestState* GS);

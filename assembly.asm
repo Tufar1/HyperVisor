@@ -2,10 +2,10 @@ PUBLIC RunLoop
 EXTERN HandleExit:PROC
 .CODE
 RunLoop PROC
-	; rcx = VMCBPA, rdx = CustomRSP
+	; rcx = GuestContext, rdx = CustomRSP, r8 = VmcbPA
   ; args
-	mov r11, rcx
 	mov rsp, rdx
+	mov r11, r8
 START:
 	mov rax, r11
 	vmload rax

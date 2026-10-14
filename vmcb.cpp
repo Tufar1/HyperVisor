@@ -48,11 +48,11 @@ extern "C" int HandleExit(GuestContext* ctx) {
 	auto Info1 = VMCB->control.exitInfo1;
 	auto Info2 = VMCB->control.exitInfo2;
   
-	DbgPrintEx(0, 0, "ExitCode: 0x%llX, info1: 0x%llX, info2: 0x%llX\n", ExitCode, Info1, Info2);
+	//DbgPrintEx(0, 0, "ExitCode: 0x%llX, info1: 0x%llX, info2: 0x%llX\n", ExitCode, Info1, Info2);
 
 	if(ExitCode == 0x7F){
-		DbgPrintEx(0,0,"RIP=%llX\n", VMCB->state.rip);
-		DbgPrintEx(0,0, "GuestContext: R15=%llX R14=%llX R13=%llX R12=%llX R11=%llX R10=%llX R9=%llX R8=%llX RBP=%llX RDI=%llX RSI=%llX RDX=%llX RCX=%llX RBX=%llX RAX=%llx RSP=%llX\n", ctx->r15, ctx->r14, ctx->r13, ctx->r12, ctx->r11, ctx->r10, ctx->r9, ctx->r8, ctx->rbp, ctx->rdi, ctx->rsi, ctx->rdx, ctx->rcx, ctx->rbx, VMCB->state.rax, VMCB->state.rsp);	
+		//DbgPrintEx(0,0,"RIP=%llX\n", VMCB->state.rip);
+		//DbgPrintEx(0,0, "GuestContext: R15=%llX R14=%llX R13=%llX R12=%llX R11=%llX R10=%llX R9=%llX R8=%llX RBP=%llX RDI=%llX RSI=%llX RDX=%llX RCX=%llX RBX=%llX RAX=%llx RSP=%llX\n", ctx->r15, ctx->r14, ctx->r13, ctx->r12, ctx->r11, ctx->r10, ctx->r9, ctx->r8, ctx->rbp, ctx->rdi, ctx->rsi, ctx->rdx, ctx->rcx, ctx->rbx, VMCB->state.rax, VMCB->state.rsp);	
 	}
 
 	if(VMCB->control.nRIP)
@@ -61,7 +61,7 @@ extern "C" int HandleExit(GuestContext* ctx) {
 	return 1;
 }
 
-bool SetupVMCB(PHYSICAL_ADDRESS VMCBPA){
+bool SetupVMCB(GuestState* GS){
 	//setup custom stack
 	auto CustomStack = reinterpret_cast<uint64_t>(MmAllocateContiguousMemory(0x5000, MaxAddress));	
 
@@ -138,8 +138,8 @@ bool SetupVMCB(PHYSICAL_ADDRESS VMCBPA){
   VMCB->state.dr6 = dr6;
   VMCB->state.dr7 = dr7;
 
-	VMCB->state.rip = reinterpret_cast<uint64_t>(_ReturnAddress());
-	VMCB->state.rsp = reinterpret_cast<uint64_t>(_AddressOfReturnAddress()) + 0x8; //0x8 simulates pop
+	VMCB->state.rip = GS->oldContext.Rip;
+	VMCB->state.rsp = GS->oldContext.Rsp;
 
 	VMCB->state.efer = EFER;
 
@@ -147,9 +147,12 @@ bool SetupVMCB(PHYSICAL_ADDRESS VMCBPA){
 
 	DumpVMCB(VMCB, 0x000, 0x400);   // Control Area
 	DumpVMCB(VMCB, 0x400, 0x700);   // State Save Area	
-	
-	svm_vmsave(reinterpret_cast<void*>(VMCBPA.QuadPart));
-	RunLoop(VMCBPA.QuadPart, CustomRSP);
+
+	GS->virtualised = true;
+
+	svm_vmsave(reinterpret_cast<void*>(GS->GuestVmcbPA.QuadPart));
+
+	RunLoop(&GS->oldContext, CustomRSP, GS->GuestVmcbPA.QuadPart);
 	
 	//This should never be executed
  

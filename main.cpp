@@ -1,4 +1,5 @@
 #include "vmcb.h"
+#include "wdm.h"
 
 void DriverUnload(DRIVER_OBJECT* driver_object) {
 	UNREFERENCED_PARAMETER(driver_object);
@@ -75,14 +76,25 @@ bool SetupVirtualization(void* ctx){
 	WriteMSR(0xC0010117, HostStatePA.QuadPart);
 	
 	svm_vmsave(reinterpret_cast<void*>(HostStatePA.QuadPart));
+	
+	GuestState GS{};
+	
+	GS.GuestVmcbPA = VMCBPA;
+
+	RtlCaptureContext(&GS.oldContext);
+	if(GS.virtualised){
+		__debugbreak();
+		RtlRestoreContext(&GS.oldContext, nullptr); //First arg is potional, it can be filled from regs by guest 
+		return true;
+	}
+
+	SetupVMCB(&GS);
+
+	//This should never be executed
+	
 	__debugbreak();
 	
-	CONTEXT oldContext{};
-	RtlCaptureContext(&oldContext);
-	SetupVMCB(VMCBPA);
-	RtlRestoreContext(&oldContext, nullptr);
-	
-	return true;	
+	return false;	
 }
 
 NTSTATUS DriverEntry(DRIVER_OBJECT* driver_object, UNICODE_STRING*) {
