@@ -5,7 +5,7 @@
 #include <ntdef.h>
 
 extern "C" void WriteMSR(uint32_t msr, uint64_t value);
-extern "C" void RunLoop(CONTEXT* oldContext, uint64_t CustomRSP, uint64_t VmcbPA);
+extern "C" void RunLoop(void* GuestVMCBPa);
 
 extern "C" uint16_t ReadCS();
 extern "C" uint16_t ReadSS();
@@ -21,6 +21,7 @@ extern "C" uint64_t ReadDR7();
 extern "C" uint64_t ReadRSP();
 
 extern "C" void svm_vmsave(void* VMCBPA);
+extern "C" void svm_vmload(void* VMCBPA);
 
 extern "C" NTSYSAPI VOID NTAPI RtlCaptureContext(_Out_ PCONTEXT ContextRecord);
 extern "C" NTSYSAPI VOID NTAPI RtlRestoreContext(_In_ PCONTEXT ContextRecord, _Out_ _EXCEPTION_RECORD *ExceptionRecord);
@@ -100,12 +101,27 @@ struct Vmcb {
     VmcbStateArea   state;
 };
 
-struct GuestState{
-	bool virtualised = false;
-	CONTEXT oldContext;
-	PHYSICAL_ADDRESS GuestVmcbPA;	
+struct alignas(0x1000) GuestState {
+	union {
+  uint8_t HostStack[0x2000];
+
+  struct {
+  	uint8_t StackContents[0x1B00];
+
+    CONTEXT oldContext;  // 0x1B00
+    PHYSICAL_ADDRESS GuestVmcbPA; // 0x1FD0
+    PHYSICAL_ADDRESS HostVmcbPA;  // 0x1FD8
+
+    Vmcb* Vmcb;           // 0x1FE0
+    bool virtualised;     // 0x1FE8
+    };
+  };
 };
 
-inline Vmcb* VMCB;
+static_assert(sizeof(CONTEXT) == 0x4D0);
+static_assert(offsetof(GuestState, GuestVmcbPA) == 0x1FD0);
+static_assert(offsetof(GuestState, Vmcb) == 0x1FE0);
+static_assert(offsetof(GuestState, oldContext) == 0x1B00);
+
 inline PHYSICAL_ADDRESS MaxAddress {.QuadPart = MAXLONGLONG};
 bool SetupVMCB(GuestState* GS);

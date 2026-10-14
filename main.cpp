@@ -64,28 +64,25 @@ bool SetupVirtualization(void* ctx){
 	
 	PHYSICAL_ADDRESS HostStatePA = MmGetPhysicalAddress(HostState);
 
-	VMCB = reinterpret_cast<Vmcb*>(MmAllocateContiguousMemory(0x1000, MaxAddress));
+	GuestState GS{};
+
+	GS.Vmcb = reinterpret_cast<Vmcb*>(MmAllocateContiguousMemory(0x1000, MaxAddress));
 	
-	if(!VMCB)
+	if(!GS.Vmcb)
 		return false;
 	
-	RtlZeroMemory(VMCB, 0x1000);
-	PHYSICAL_ADDRESS VMCBPA = MmGetPhysicalAddress(VMCB);
+	RtlZeroMemory(GS.Vmcb, 0x1000);
+	GS.HostVmcbPA = HostStatePA;
+	GS.GuestVmcbPA = MmGetPhysicalAddress(GS.Vmcb);
 
 	//write to HSAVE msr
 	WriteMSR(0xC0010117, HostStatePA.QuadPart);
 	
 	svm_vmsave(reinterpret_cast<void*>(HostStatePA.QuadPart));
-	
-	GuestState GS{};
-	
-	GS.GuestVmcbPA = VMCBPA;
-
 	RtlCaptureContext(&GS.oldContext);
 	if(GS.virtualised){
 		__debugbreak();
-		RtlRestoreContext(&GS.oldContext, nullptr); //First arg is potional, it can be filled from regs by guest 
-		return true;
+		return true; //This returns to 0x18??
 	}
 
 	SetupVMCB(&GS);

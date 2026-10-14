@@ -2,19 +2,21 @@ PUBLIC RunLoop
 EXTERN HandleExit:PROC
 .CODE
 RunLoop PROC
-	; rcx = GuestContext, rdx = CustomRSP, r8 = VmcbPA
-  ; args
-	mov rsp, rdx
-	mov r11, r8
-START:
-	mov rax, r11
+	; rcx = Adress of GuestVmcbPa 
+	; args
+  
+	mov rsp, rcx
+START:	
+	mov rax, [rsp]
 	vmload rax
 
-	mov rax, r11
+	mov rax, [rsp]
 	vmrun rax
 
-	mov rax, r11
+	mov rax, [rsp]
 	vmsave rax
+
+	sub rsp, 200h	
 
 	push rbx
 	push rcx
@@ -31,7 +33,14 @@ START:
 	push r14
 	push r15
 
+	; 14x8 = 112 = 0x70
+	; 0x70 + 0x200 shadow = 0x270
+	; Vmcb* is 0x10 apart from GuestVmcbPa
+
 	mov rcx, rsp
+	mov rdx, [rsp + 280h]
+	mov r8, [rsp + 288h]
+
 	sub rsp, 28h
 	call HandleExit
 	add rsp, 28h	
@@ -50,6 +59,8 @@ START:
 	pop rdx
 	pop rcx
 	pop rbx
+
+	add rsp, 200h
 
 	jmp START
 	
@@ -116,4 +127,10 @@ svm_vmsave PROC
     vmsave rax
     ret
 svm_vmsave ENDP
+
+svm_vmload PROC
+    mov rax, rcx
+    vmload rax
+    ret
+svm_vmload ENDP
 END

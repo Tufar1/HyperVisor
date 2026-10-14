@@ -43,38 +43,34 @@ VmcbSegment GetSegmentFromGDT(uint16_t selector) {
   return seg;
 }
 
-extern "C" int HandleExit(GuestContext* ctx) {
-	auto ExitCode = VMCB->control.exitCode;
-	auto Info1 = VMCB->control.exitInfo1;
-	auto Info2 = VMCB->control.exitInfo2;
+extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, PHYSICAL_ADDRESS HostStatePA) {
+	svm_vmload(reinterpret_cast<void*>(HostStatePA.QuadPart));
+
+	auto ExitCode = Vmcb->control.exitCode;
+	auto Info1 = Vmcb->control.exitInfo1;
+	auto Info2 = Vmcb->control.exitInfo2;
   
-	//DbgPrintEx(0, 0, "ExitCode: 0x%llX, info1: 0x%llX, info2: 0x%llX\n", ExitCode, Info1, Info2);
+	DbgPrintEx(0, 0, "ExitCode: 0x%llX, info1: 0x%llX, info2: 0x%llX\n", ExitCode, Info1, Info2);
 
-	if(ExitCode == 0x7F){
-		//DbgPrintEx(0,0,"RIP=%llX\n", VMCB->state.rip);
-		//DbgPrintEx(0,0, "GuestContext: R15=%llX R14=%llX R13=%llX R12=%llX R11=%llX R10=%llX R9=%llX R8=%llX RBP=%llX RDI=%llX RSI=%llX RDX=%llX RCX=%llX RBX=%llX RAX=%llx RSP=%llX\n", ctx->r15, ctx->r14, ctx->r13, ctx->r12, ctx->r11, ctx->r10, ctx->r9, ctx->r8, ctx->rbp, ctx->rdi, ctx->rsi, ctx->rdx, ctx->rcx, ctx->rbx, VMCB->state.rax, VMCB->state.rsp);	
-	}
+	//if(ExitCode == 0x7F){
+		//DbgPrintEx(0,0,"RIP=%llX\n", Vmcb->state.rip);
+		//DbgPrintEx(0,0, "GuestContext: R15=%llX R14=%llX R13=%llX R12=%llX R11=%llX R10=%llX R9=%llX R8=%llX RBP=%llX RDI=%llX RSI=%llX RDX=%llX RCX=%llX RBX=%llX RAX=%llx RSP=%llX\n", ctx->r15, ctx->r14, ctx->r13, ctx->r12, ctx->r11, ctx->r10, ctx->r9, ctx->r8, ctx->rbp, ctx->rdi, ctx->rsi, ctx->rdx, ctx->rcx, ctx->rbx, Vmcb->state.rax, Vmcb->state.rsp);	
+	//}
 
-	if(VMCB->control.nRIP)
-		VMCB->state.rip = VMCB->control.nRIP;
+	if(Vmcb->control.nRIP)
+		Vmcb->state.rip = Vmcb->control.nRIP;
 
 	return 1;
 }
 
 bool SetupVMCB(GuestState* GS){
-	//setup custom stack
-	auto CustomStack = reinterpret_cast<uint64_t>(MmAllocateContiguousMemory(0x5000, MaxAddress));	
-
-	if(!CustomStack)
-		return false;
-
-	auto CustomRSP = reinterpret_cast<uint64_t>(CustomStack) + 0x5000;		
-
 	//Control Area	
-	VMCB->control.interceptMisc1 |= (1u << 31);
-  VMCB->control.interceptMisc1 |= (1u << 18);
-  VMCB->control.interceptMisc2 |= (1u << 0);
-	VMCB->control.guestASID = 1;
+	GS->Vmcb->control.interceptMisc1 |= (1u << 31);
+  
+	GS->Vmcb->control.interceptMisc1 |= (1u << 18);
+  
+	GS->Vmcb->control.interceptMisc2 |= (1u << 0);
+	GS->Vmcb->control.guestASID = 1;
 
 	void* msrpm = MmAllocateContiguousMemory(2 * PAGE_SIZE, MaxAddress);
 	void* iopm  = MmAllocateContiguousMemory(3 * PAGE_SIZE, MaxAddress);
@@ -85,8 +81,8 @@ bool SetupVMCB(GuestState* GS){
 	PHYSICAL_ADDRESS msrpmPhys = MmGetPhysicalAddress(msrpm);
 	PHYSICAL_ADDRESS iopmPhys  = MmGetPhysicalAddress(iopm);
 	
-  VMCB->control.msrpmBasePA = MmGetPhysicalAddress(msrpm).QuadPart;
-  VMCB->control.iopmBasePA  = MmGetPhysicalAddress(iopm).QuadPart;
+  GS->Vmcb->control.msrpmBasePA = MmGetPhysicalAddress(msrpm).QuadPart;
+  GS->Vmcb->control.iopmBasePA  = MmGetPhysicalAddress(iopm).QuadPart;
 
 	//State area	
 
@@ -114,45 +110,44 @@ bool SetupVMCB(GuestState* GS){
 	uint64_t rflags = __readeflags();
 
 	rflags &= ~(1ULL << 9);	
-	VMCB->state.rflags = rflags;
+	GS->Vmcb->state.rflags = rflags;
 
-	VMCB->state.gdtr.limit = gdtr.limit;
-  VMCB->state.gdtr.base  = gdtr.base;
+	GS->Vmcb->state.gdtr.limit = gdtr.limit;
+  GS->Vmcb->state.gdtr.base  = gdtr.base;
   
-	VMCB->state.idtr.limit = idtr.limit;
-  VMCB->state.idtr.base  = idtr.base;
+	GS->Vmcb->state.idtr.limit = idtr.limit;
+  GS->Vmcb->state.idtr.base  = idtr.base;
 	
-  VMCB->state.cs.selector = csSeg.selector;
-  VMCB->state.cs.attrib   = csSeg.attrib;
-  VMCB->state.cs.limit    = csSeg.limit;
-  VMCB->state.cs.base     = csSeg.base;
+  GS->Vmcb->state.cs.selector = csSeg.selector;
+  GS->Vmcb->state.cs.attrib   = csSeg.attrib;
+  GS->Vmcb->state.cs.limit    = csSeg.limit;
+  GS->Vmcb->state.cs.base     = csSeg.base;
 
-  VMCB->state.ss.selector = ssSeg.selector;
-  VMCB->state.ss.attrib   = ssSeg.attrib;
-  VMCB->state.ss.limit    = ssSeg.limit;
-  VMCB->state.ss.base     = ssSeg.base;
+  GS->Vmcb->state.ss.selector = ssSeg.selector;
+  GS->Vmcb->state.ss.attrib   = ssSeg.attrib;
+  GS->Vmcb->state.ss.limit    = ssSeg.limit;
+  GS->Vmcb->state.ss.base     = ssSeg.base;
 
-  VMCB->state.cr0 = cr0;
-  VMCB->state.cr3 = cr3;
-  VMCB->state.cr4 = cr4;
-  VMCB->state.dr6 = dr6;
-  VMCB->state.dr7 = dr7;
+  GS->Vmcb->state.cr0 = cr0;
+  GS->Vmcb->state.cr3 = cr3;
+  GS->Vmcb->state.cr4 = cr4;
+  GS->Vmcb->state.dr6 = dr6;
+  GS->Vmcb->state.dr7 = dr7;
 
-	VMCB->state.rip = GS->oldContext.Rip;
-	VMCB->state.rsp = GS->oldContext.Rsp;
+	GS->Vmcb->state.rip = GS->oldContext.Rip;
+	GS->Vmcb->state.rsp = GS->oldContext.Rsp;
 
-	VMCB->state.efer = EFER;
+	GS->Vmcb->state.efer = EFER;
 
-	VMCB->state.cpl = 0;
+	GS->Vmcb->state.cpl = 0;
 
-	DumpVMCB(VMCB, 0x000, 0x400);   // Control Area
-	DumpVMCB(VMCB, 0x400, 0x700);   // State Save Area	
+	DumpVMCB(GS->Vmcb, 0x000, 0x400);   // Control Area
+	DumpVMCB(GS->Vmcb, 0x400, 0x700);   // State Save Area	
 
 	GS->virtualised = true;
 
 	svm_vmsave(reinterpret_cast<void*>(GS->GuestVmcbPA.QuadPart));
-
-	RunLoop(&GS->oldContext, CustomRSP, GS->GuestVmcbPA.QuadPart);
+	RunLoop(&GS->GuestVmcbPA);
 	
 	//This should never be executed
  
