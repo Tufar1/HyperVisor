@@ -5,7 +5,7 @@ void DriverUnload(DRIVER_OBJECT* driver_object) {
 	UNREFERENCED_PARAMETER(driver_object);
 }
 
-void SetupVirtualization(void* ctx){
+bool SetupVirtualization(void* ctx){
 	bool CanVirt = false;
 
 	auto VM_CR = __readmsr(0xC0010114);
@@ -29,7 +29,7 @@ void SetupVirtualization(void* ctx){
 			DbgPrintEx(0, 0, "SVM Disabled at bios\n");
 		else
 			DbgPrintEx(0, 0, "SVM Disabled with key\n");
-		return;
+		return false;
 	}
 
 	//VMRUN Instruction ----
@@ -58,16 +58,29 @@ void SetupVirtualization(void* ctx){
 	auto HostState = MmAllocateContiguousMemory(0x1000, MaxAddress);
 	
 	if(!HostState)
-		return;
+		return false;
 
 	RtlZeroMemory(HostState, 0x1000);
 	
 	PHYSICAL_ADDRESS HostStatePA = MmGetPhysicalAddress(HostState);
+
+	VMCB = reinterpret_cast<Vmcb*>(MmAllocateContiguousMemory(0x1000, MaxAddress));
 	
+	if(!VMCB)
+		return false;
+	
+	RtlZeroMemory(VMCB, 0x1000);
+	PHYSICAL_ADDRESS VMCBPA = MmGetPhysicalAddress(VMCB);
+
 	//write to HSAVE msr
 	WriteMSR(0xC0010117, HostStatePA.QuadPart);
 	
-	SetupVMCB();
+	svm_vmsave(reinterpret_cast<void*>(HostStatePA.QuadPart));
+	svm_vmsave(reinterpret_cast<void*>(VMCBPA.QuadPart));
+
+	SetupVMCB(VMCBPA);
+
+	return true;	
 }
 
 NTSTATUS DriverEntry(DRIVER_OBJECT* driver_object, UNICODE_STRING*) {

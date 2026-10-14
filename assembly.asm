@@ -4,28 +4,12 @@ EXTERN HandleExit:PROC
 RunLoop PROC
 	; rcx = VMCBPA, rdx = CustomRSP
   ; args
-	add rsp, 98h
-	
-	pop rbx
-	pop rdi
-	pop rsi
-	pop r12
-	pop r13
-	pop r14
-	pop r15
-	pop rbp
-
-	mov r11, rcx
+	mov rax, rcx
 	mov rsp, rdx
 START:
-	mov rax, r11
-	db 0Fh, 01h, 0DBh  ; vmsave
-	
-	mov rax, r11
-  db 0Fh, 01h, 0D8h  ; vmrun
-
-	mov rax, r11
-	db 0Fh, 01h, 0DAh   ; vmload (obnoví host FS/GS/TR/LDTR/MSR z VMCB)	
+	vmload rax
+	vmrun rax
+	vmsave rax
 
 	push rbx
 	push rcx
@@ -121,4 +105,10 @@ ReadRSP PROC
     mov rax, rsp 
     ret
 ReadRSP ENDP
+
+svm_vmsave PROC
+    mov rax, rcx
+    vmsave rax
+    ret
+svm_vmsave ENDP
 END

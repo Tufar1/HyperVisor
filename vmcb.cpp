@@ -2,6 +2,7 @@
 #include "ntddk.h"
 #include "wdm.h"
 #include <cstdint>
+#include <ntdef.h>
 
 void DumpVMCB(void* vmcb, size_t from, size_t to) {
 	auto* base = reinterpret_cast<uint8_t*>(vmcb);
@@ -60,20 +61,10 @@ extern "C" int HandleExit(GuestContext* ctx) {
 	return 1;
 }
 
-bool SetupVMCB(){
-	//Prepare memory
-	PHYSICAL_ADDRESS maxAddr;
-	maxAddr.QuadPart = MAXULONG64;
-
-	VMCB = reinterpret_cast<Vmcb*>(MmAllocateContiguousMemory(0x1000, maxAddr));
-	if(!VMCB)
-		return false;
-	RtlZeroMemory(VMCB, 0x1000);
-	PHYSICAL_ADDRESS VMCBPA = MmGetPhysicalAddress(VMCB);
-
+bool SetupVMCB(PHYSICAL_ADDRESS VMCBPA){
 	//setup custom stack
-	auto CustomStack = reinterpret_cast<uint64_t>(MmAllocateContiguousMemory(0x5000, maxAddr));	
-	
+	auto CustomStack = reinterpret_cast<uint64_t>(MmAllocateContiguousMemory(0x5000, MaxAddress));	
+
 	if(!CustomStack)
 		return false;
 
@@ -85,8 +76,8 @@ bool SetupVMCB(){
   VMCB->control.interceptMisc2 |= (1u << 0);
 	VMCB->control.guestASID = 1;
 
-	void* msrpm = MmAllocateContiguousMemory(2 * PAGE_SIZE, maxAddr);
-	void* iopm  = MmAllocateContiguousMemory(3 * PAGE_SIZE, maxAddr);
+	void* msrpm = MmAllocateContiguousMemory(2 * PAGE_SIZE, MaxAddress);
+	void* iopm  = MmAllocateContiguousMemory(3 * PAGE_SIZE, MaxAddress);
 
 	RtlZeroMemory(msrpm, 2 * PAGE_SIZE);
 	RtlZeroMemory(iopm, 3 * PAGE_SIZE);	
@@ -149,7 +140,7 @@ bool SetupVMCB(){
 
 	VMCB->state.rax = 1;
 	VMCB->state.rip = reinterpret_cast<uint64_t>(_ReturnAddress());
-	VMCB->state.rsp = rsp + 0x98;
+	VMCB->state.rsp = reinterpret_cast<uint64_t>(_AddressOfReturnAddress()) + 0x8; //0x8 simulates pop
 
 	VMCB->state.efer = EFER;
 

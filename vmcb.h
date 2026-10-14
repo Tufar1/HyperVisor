@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <intrin.h>
 #include <ntddk.h>
+#include <ntdef.h>
 
 extern "C" void WriteMSR(uint32_t msr, uint64_t value);
 extern "C" void RunLoop(uint64_t VMCBPA, uint64_t CustomRSP);
@@ -18,6 +19,8 @@ extern "C" uint64_t ReadDR6();
 extern "C" uint64_t ReadDR7();
 
 extern "C" uint64_t ReadRSP();
+
+extern "C" void svm_vmsave(void* VMCBPA);
 
 #pragma pack(push, 1)
 struct GDTR {
@@ -95,5 +98,5 @@ struct Vmcb {
 };
 
 inline Vmcb* VMCB;
-
-bool SetupVMCB();
+inline PHYSICAL_ADDRESS MaxAddress {.QuadPart = MAXLONGLONG};
+bool SetupVMCB(PHYSICAL_ADDRESS VMCBPA);
