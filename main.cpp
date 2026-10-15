@@ -1,60 +1,19 @@
 #include "vmcb.h"
 #include "wdm.h"
 
+typedef bool (*callback)(PVOID ctx);
+
 void DriverUnload(DRIVER_OBJECT* driver_object) {
 	UNREFERENCED_PARAMETER(driver_object);
 }
 
-bool SetupVirtualization(void* ctx){
-	bool CanVirt = false;
-
-	auto VM_CR = __readmsr(0xC0010114);
-	if(((VM_CR >> 4) & 1) == 0){
-		DbgPrintEx(0, 0, "SVM Ready\n");
-		CanVirt = true;
-	}
-	
-	int regs[4];
-	__cpuid(regs, 0x80000001);
-	auto ecx = regs[2];
-	
-	if((ecx & (1 << 2)) == 0)
-		DbgPrintEx(0, 0, "SVM Not available\n");
-
-	__cpuid(regs, 0x8000000A);
-	auto edx = regs[3];	
-
-	if(!CanVirt){
-		if((edx & (1 << 2)) == 0)
-			DbgPrintEx(0, 0, "SVM Disabled at bios\n");
-		else
-			DbgPrintEx(0, 0, "SVM Disabled with key\n");
-		return false;
-	}
-
-	//VMRUN Instruction ----
-	//Block is accessed thru Physical Address in [RAX]
-	//Block should be mapped as write-back memory, 4KB aligned page
-	//Block describes virtual machine for execution (my system clone?)
-	//VM_HSAVE_PA MSR is pointer to where to save host state on vmrun and recover on vmexit
-  
-	//Enable EFER.SVME on each processor
-	//enable virtualization
-	//todo - each processor
-	
-	KAFFINITY affinity = (KAFFINITY)1;
-
-	KeSetSystemAffinityThread(affinity);	
-
+bool VirtualiseProcessor(void* ctx){
 	auto EFER = __readmsr(0xC0000080);
 	EFER = (EFER | (0x1 << 12));
 	WriteMSR(0xC0000080, EFER);
 	DbgPrintEx(0, 0, "Enabled SVME\n");
 
 	//write to HSAVE msr
-	PHYSICAL_ADDRESS MaxAddress;
-	MaxAddress.QuadPart = MAXULONG;
-		
 	auto HostState = MmAllocateContiguousMemory(0x1000, MaxAddress);
 	
 	if(!HostState)
@@ -82,7 +41,6 @@ bool SetupVirtualization(void* ctx){
 	RtlCaptureContext(&GS.oldContext);
 	
 	if(GS.virtualised){
-		__debugbreak();
 		return true;
 	}
 
@@ -96,19 +54,91 @@ bool SetupVirtualization(void* ctx){
 	//This should never be executed
 	
 	__debugbreak();
+}
+
+uint16_t ExecOnEachCore(callback callback, PVOID ctx)
+{
+	NTSTATUS status;
+  PROCESSOR_NUMBER processor_number;
+  GROUP_AFFINITY affinity, previous_affinity;
+  uint16_t i, processors;
+
+  processors = KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
+
+  for (i = 0; i < processors; i++)
+  {
+  	status = KeGetProcessorNumberFromIndex(i, &processor_number);
+    if (!NT_SUCCESS(status))
+    	return 0;
+
+    affinity.Group = processor_number.Group;
+    affinity.Mask = 1ULL << processor_number.Number;
+    affinity.Reserved[0] = affinity.Reserved[1] = affinity.Reserved[2] = 0;
+
+    KeSetSystemGroupAffinityThread(&affinity, &previous_affinity);
+
+  	bool success = callback(ctx);
+
+    KeRevertToUserGroupAffinityThread(&previous_affinity);
+
+    if (!success)
+    	return i;
+    }
+  return i;
+}
+
+void SetupVirtualization(void* ctx){
+	bool CanVirt = false;
+
+	auto VM_CR = __readmsr(0xC0010114);
+	if(((VM_CR >> 4) & 1) == 0){
+		DbgPrintEx(0, 0, "SVM Ready\n");
+		CanVirt = true;
+	}
 	
-	return false;	
+	int regs[4];
+	__cpuid(regs, 0x80000001);
+	auto ecx = regs[2];
+	
+	if((ecx & (1 << 2)) == 0)
+		DbgPrintEx(0, 0, "SVM Not available\n");
+
+	__cpuid(regs, 0x8000000A);
+	auto edx = regs[3];	
+
+	if(!CanVirt){
+		if((edx & (1 << 2)) == 0)
+			DbgPrintEx(0, 0, "SVM Disabled at bios\n");
+		else
+			DbgPrintEx(0, 0, "SVM Disabled with key\n");
+		PsTerminateSystemThread(0);;
+	}
+
+	if(!ExecOnEachCore(VirtualiseProcessor, nullptr)){
+		DbgPrintEx(0, 0, "Cant virtualise each core\n");
+		PsTerminateSystemThread(0);
+	}
+
+	//VMRUN Instruction ----
+	//Block is accessed thru Physical Address in [RAX]
+	//Block should be mapped as write-back memory, 4KB aligned page
+	//Block describes virtual machine for execution (my system clone?)
+	//VM_HSAVE_PA MSR is pointer to where to save host state on vmrun and recover on vmexit
+  
+	//Enable EFER.SVME on each processor
+	//enable virtualization
+	//todo - each processor
+	
+	PsTerminateSystemThread(0);	
 }
 
 NTSTATUS DriverEntry(DRIVER_OBJECT* driver_object, UNICODE_STRING*) {
 	DbgPrintEx(0, 0, "Hello from driver!\n");
-	driver_object->DriverUnload = DriverUnload;
+	//driver_object->DriverUnload = DriverUnload;
 
-	//HANDLE OutHandle;
-	//PsCreateSystemThread(&OutHandle, GENERIC_ALL, nullptr, nullptr, nullptr, SetupVirtualization, nullptr);
-	//ZwClose(OutHandle);
-	
-	SetupVirtualization(nullptr);
+	HANDLE OutHandle;
+	PsCreateSystemThread(&OutHandle, GENERIC_ALL, nullptr, nullptr, nullptr, SetupVirtualization, nullptr);
+	ZwClose(OutHandle);
 
 	return STATUS_SUCCESS;
 }
