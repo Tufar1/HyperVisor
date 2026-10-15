@@ -50,10 +50,9 @@ extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
 	auto Info1 = Vmcb->control.exitInfo1;
 	auto Info2 = Vmcb->control.exitInfo2;
   
-	DbgPrintEx(0, 0, "ExitCode: 0x%llX, info1: 0x%llX, info2: 0x%llX\n", ExitCode, Info1, Info2);
-	if(ExitCode == 0x7F){
-		//DbgPrintEx(0,0,"RIP=%llX\n", Vmcb->state.rip);
-		//DbgPrintEx(0,0, "GuestContext: R15=%llX R14=%llX R13=%llX R12=%llX R11=%llX R10=%llX R9=%llX R8=%llX RBP=%llX RDI=%llX RSI=%llX RDX=%llX RCX=%llX RBX=%llX RAX=%llx RSP=%llX\n", ctx->r15, ctx->r14, ctx->r13, ctx->r12, ctx->r11, ctx->r10, ctx->r9, ctx->r8, ctx->rbp, ctx->rdi, ctx->rsi, ctx->rdx, ctx->rcx, ctx->rbx, Vmcb->state.rax, Vmcb->state.rsp);	
+	if(ExitCode == 0x81){
+		if(Vmcb->state.rax == 0xDEADBEEF)
+			Vmcb->state.rax = 0xFA5EBABE;
 	}
 
 	if(Vmcb->control.nRIP)
@@ -65,9 +64,8 @@ extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
 bool SetupVMCB(GuestState* GS){
 	//Control Area	
   
-	//GS->Vmcb->control.interceptMisc1 |= (1u << 18);// - cpuid
- 	GS->Vmcb->control.interceptMisc2 |= (1u << 1);// - vmmcall 
 	GS->Vmcb->control.interceptMisc2 |= (1u << 0);// - vmrun
+	GS->Vmcb->control.interceptMisc2 |= (1u << 1);// - vmmcall
 	
 	GS->Vmcb->control.guestASID = 1;
 
