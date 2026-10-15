@@ -1,5 +1,6 @@
 #include "vmcb.h"
 #include "wdm.h"
+#include <cstdint>
 
 typedef bool (*callback)(PVOID ctx);
 
@@ -7,7 +8,9 @@ void DriverUnload(DRIVER_OBJECT* driver_object) {
 	UNREFERENCED_PARAMETER(driver_object);
 }
 
-bool VirtualiseProcessor(void* ctx){
+bool VirtualiseProcessor(void* gs){
+	auto GS = reinterpret_cast<GuestState*>(gs);
+
 	auto EFER = __readmsr(0xC0000080);
 	EFER = (EFER | (0x1 << 12));
 	WriteMSR(0xC0000080, EFER);
@@ -23,37 +26,37 @@ bool VirtualiseProcessor(void* ctx){
 	
 	PHYSICAL_ADDRESS HostStatePA = MmGetPhysicalAddress(HostState);
 
-	GuestState GS{};
-
-	GS.Vmcb = reinterpret_cast<Vmcb*>(MmAllocateContiguousMemory(0x1000, MaxAddress));
+	GS->Vmcb = reinterpret_cast<Vmcb*>(MmAllocateContiguousMemory(0x1000, MaxAddress));
 	
-	if(!GS.Vmcb)
+	if(!GS->Vmcb)
 		return false;
 	
-	RtlZeroMemory(GS.Vmcb, 0x1000);
-	GS.HostVmcbPA = HostStatePA.QuadPart;
-	GS.GuestVmcbPA = MmGetPhysicalAddress(GS.Vmcb);
+	RtlZeroMemory(GS->Vmcb, 0x1000);
+	GS->HostVmcbPA = HostStatePA.QuadPart;
+	GS->GuestVmcbPA = MmGetPhysicalAddress(GS->Vmcb);
 
 	//write to HSAVE msr
 	WriteMSR(0xC0010117, HostStatePA.QuadPart);
 	
 	svm_vmsave(reinterpret_cast<void*>(HostStatePA.QuadPart));
-	RtlCaptureContext(&GS.oldContext);
+	RtlCaptureContext(&GS->oldContext);
 	
-	if(GS.virtualised){
+	if(GS->virtualised){
 		return true;
 	}
 
-	SetupVMCB(&GS);
-	GS.virtualised = true;	
+	SetupVMCB(GS);
+	GS->virtualised = true;	
 	
-	svm_vmsave(reinterpret_cast<void*>(GS.GuestVmcbPA.QuadPart));
+	svm_vmsave(reinterpret_cast<void*>(GS->GuestVmcbPA.QuadPart));
 	
-	RunLoop(&GS.GuestVmcbPA);
+	RunLoop(&GS->GuestVmcbPA);
 
 	//This should never be executed
 	
 	__debugbreak();
+
+	return false;
 }
 
 uint16_t ExecOnEachCore(callback callback, PVOID ctx)
@@ -77,7 +80,7 @@ uint16_t ExecOnEachCore(callback callback, PVOID ctx)
 
     KeSetSystemGroupAffinityThread(&affinity, &previous_affinity);
 
-  	bool success = callback(ctx);
+  	bool success = callback(reinterpret_cast<void*>(reinterpret_cast<uint64_t>(ctx) + i*sizeof(GuestState)));
 
     KeRevertToUserGroupAffinityThread(&previous_affinity);
 
@@ -111,12 +114,16 @@ void SetupVirtualization(void* ctx){
 			DbgPrintEx(0, 0, "SVM Disabled at bios\n");
 		else
 			DbgPrintEx(0, 0, "SVM Disabled with key\n");
-		PsTerminateSystemThread(0);;
+		return;
 	}
 
-	if(!ExecOnEachCore(VirtualiseProcessor, nullptr)){
+	auto processors = KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
+
+	auto SharedStruct = ExAllocatePoolWithTag(NonPagedPool, sizeof(GuestState) * processors, 'GS');
+
+	if(!ExecOnEachCore(VirtualiseProcessor, SharedStruct)){
 		DbgPrintEx(0, 0, "Cant virtualise each core\n");
-		PsTerminateSystemThread(0);
+		return;
 	}
 
 	//VMRUN Instruction ----
@@ -129,16 +136,17 @@ void SetupVirtualization(void* ctx){
 	//enable virtualization
 	//todo - each processor
 	
-	PsTerminateSystemThread(0);	
+	return;
 }
 
 NTSTATUS DriverEntry(DRIVER_OBJECT* driver_object, UNICODE_STRING*) {
 	DbgPrintEx(0, 0, "Hello from driver!\n");
 	//driver_object->DriverUnload = DriverUnload;
 
-	HANDLE OutHandle;
-	PsCreateSystemThread(&OutHandle, GENERIC_ALL, nullptr, nullptr, nullptr, SetupVirtualization, nullptr);
-	ZwClose(OutHandle);
+	//HANDLE OutHandle;
+	//PsCreateSystemThread(&OutHandle, GENERIC_ALL, nullptr, nullptr, nullptr, SetupVirtualization, nullptr);
+	
+	SetupVirtualization(nullptr);
 
 	return STATUS_SUCCESS;
 }
