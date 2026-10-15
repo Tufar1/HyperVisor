@@ -64,11 +64,11 @@ extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
 
 bool SetupVMCB(GuestState* GS){
 	//Control Area	
-	GS->Vmcb->control.interceptMisc1 |= (1u << 31);
   
-	GS->Vmcb->control.interceptMisc1 |= (1u << 18);
-  
-	GS->Vmcb->control.interceptMisc2 |= (1u << 0);
+	//GS->Vmcb->control.interceptMisc1 |= (1u << 18);// - cpuid
+ 	GS->Vmcb->control.interceptMisc2 |= (1u << 1);// - vmmcall 
+	GS->Vmcb->control.interceptMisc2 |= (1u << 0);// - vmrun
+	
 	GS->Vmcb->control.guestASID = 1;
 
 	void* msrpm = MmAllocateContiguousMemory(2 * PAGE_SIZE, MaxAddress);
@@ -140,8 +140,8 @@ bool SetupVMCB(GuestState* GS){
 
 	GS->Vmcb->state.cpl = 0;
 
-	DumpVMCB(GS->Vmcb, 0x000, 0x400);   // Control Area
-	DumpVMCB(GS->Vmcb, 0x400, 0x700);   // State Save Area	
+	//DumpVMCB(GS->Vmcb, 0x000, 0x400);   // Control Area
+	//DumpVMCB(GS->Vmcb, 0x400, 0x700);   // State Save Area	
 
 	return true;
 }

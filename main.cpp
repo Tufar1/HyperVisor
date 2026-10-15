@@ -14,7 +14,6 @@ bool VirtualiseProcessor(void* gs){
 	auto EFER = __readmsr(0xC0000080);
 	EFER = (EFER | (0x1 << 12));
 	WriteMSR(0xC0000080, EFER);
-	DbgPrintEx(0, 0, "Enabled SVME\n");
 
 	//write to HSAVE msr
 	auto HostState = MmAllocateContiguousMemory(0x1000, MaxAddress);
@@ -122,7 +121,6 @@ void SetupVirtualization(void* ctx){
 	auto SharedStruct = ExAllocatePoolWithTag(NonPagedPool, sizeof(GuestState) * processors, 'GS');
 
 	if(!ExecOnEachCore(VirtualiseProcessor, SharedStruct)){
-		DbgPrintEx(0, 0, "Cant virtualise each core\n");
 		return;
 	}
 
@@ -140,7 +138,6 @@ void SetupVirtualization(void* ctx){
 }
 
 NTSTATUS DriverEntry(DRIVER_OBJECT* driver_object, UNICODE_STRING*) {
-	DbgPrintEx(0, 0, "Hello from driver!\n");
 	//driver_object->DriverUnload = DriverUnload;
 
 	//HANDLE OutHandle;
