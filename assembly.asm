@@ -16,7 +16,7 @@ START:
 	mov rax, [rsp]
 	vmsave rax
 
-	sub rsp, 200h	
+	sub rsp, 300h	
 
 	push rbx
 	push rcx
@@ -33,17 +33,18 @@ START:
 	push r14
 	push r15
 
+	mov rcx, rsp
+	
 	; 14x8 = 112 = 0x70
 	; 0x70 + 0x200 shadow = 0x270
 	; Vmcb* is 0x10 apart from GuestVmcbPa
 
-	mov rcx, rsp
-	mov rdx, [rsp + 280h]
-	mov r8, [rsp + 278h]
+	mov rdx, [rsp + 380h]
+	mov r8, [rsp + 378h]
 
-	sub rsp, 28h
+	sub rsp, 20h
 	call HandleExit
-	add rsp, 28h	
+	add rsp, 20h	
 
 	pop r15
 	pop r14
@@ -60,7 +61,7 @@ START:
 	pop rcx
 	pop rbx
 
-	add rsp, 200h
+	add rsp, 300h
 
 	jmp START
 	

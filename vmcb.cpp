@@ -1,4 +1,5 @@
 #include "vmcb.h"
+#include "debugging.h"
 #include "ntddk.h"
 #include "wdm.h"
 #include <cstdint>
@@ -49,10 +50,58 @@ extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
 	auto ExitCode = Vmcb->control.exitCode;
 	auto Info1 = Vmcb->control.exitInfo1;
 	auto Info2 = Vmcb->control.exitInfo2;
-  
+ 
+	DbgPrintEx(0,0,"Exitcode: %llx\n", ExitCode);
+
 	if(ExitCode == 0x81){
-		if(Vmcb->state.rax == 0xDEADBEEF)
-			Vmcb->state.rax = 0xFA5EBABE;
+		switch (Vmcb->state.rax){
+			case 0x420001: {//INIT, map allocated page to our driver for simpler communication and set target cr3
+				targetCR3 = Vmcb->state.cr3;
+
+				auto MapTranslated = GetTargetPAFromVA(ctx->rcx);
+				if(!MapTranslated){
+					Vmcb->state.rax = 5;
+					break;
+				}
+
+				PHYSICAL_ADDRESS MapPA{.QuadPart = static_cast<LONGLONG>(MapTranslated)};
+
+				auto MappedAddress = MmMapIoSpace(MapPA, 0x1000, MmNonCached);
+
+				if(!MappedAddress){
+					Vmcb->state.rax = 4;
+					break;
+				}
+
+				SharedCommunication = reinterpret_cast<SharedComms*>(MappedAddress);
+
+				auto name = reinterpret_cast<char*>(SharedCommunication->buffer);	
+
+				targetCR3 = GetCR3FromName(name);
+
+				if(!targetCR3){
+					Vmcb->state.rax = 3;
+					break;
+				}	
+				RtlZeroMemory(SharedCommunication, 0x1000);
+				*(uint64_t*)(SharedCommunication->buffer) = targetCR3;
+
+				Vmcb->state.rax = 1;
+				break;
+			}
+			
+			case 0x420010: { //Get Base address from name
+				auto moduleAddress = GetTargetModuleBase();
+
+				RtlZeroMemory(SharedCommunication, 0x1000);
+				*(uint64_t*)(SharedCommunication->buffer) = moduleAddress;
+				break;
+			}
+			default: {
+				break;
+				//trigger ud
+			}
+		}
 	}
 
 	if(Vmcb->control.nRIP)

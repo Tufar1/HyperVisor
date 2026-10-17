@@ -8,6 +8,37 @@ void DriverUnload(DRIVER_OBJECT* driver_object) {
 	UNREFERENCED_PARAMETER(driver_object);
 }
 
+uint16_t ExecOnEachCore(callback callback, PVOID ctx)
+{
+	NTSTATUS status;
+  PROCESSOR_NUMBER processor_number;
+  GROUP_AFFINITY affinity, previous_affinity;
+  uint16_t i, processors;
+
+  processors = KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
+
+  for (i = 0; i < processors; i++)
+  {
+  	status = KeGetProcessorNumberFromIndex(i, &processor_number);
+    if (!NT_SUCCESS(status))
+    	return 0;
+
+    affinity.Group = processor_number.Group;
+    affinity.Mask = 1ULL << processor_number.Number;
+    affinity.Reserved[0] = affinity.Reserved[1] = affinity.Reserved[2] = 0;
+
+    KeSetSystemGroupAffinityThread(&affinity, &previous_affinity);
+
+  	bool success = callback(reinterpret_cast<void*>(reinterpret_cast<uint64_t>(ctx) + i*sizeof(GuestState)));
+
+    KeRevertToUserGroupAffinityThread(&previous_affinity);
+
+    if (!success)
+    	return i;
+    }
+  return i;
+}
+
 bool VirtualiseProcessor(void* gs){
 	auto GS = reinterpret_cast<GuestState*>(gs);
 
@@ -51,43 +82,9 @@ bool VirtualiseProcessor(void* gs){
 	
 	RunLoop(&GS->GuestVmcbPA);
 
-	//This should never be executed
-	
-	__debugbreak();
-
 	return false;
 }
 
-uint16_t ExecOnEachCore(callback callback, PVOID ctx)
-{
-	NTSTATUS status;
-  PROCESSOR_NUMBER processor_number;
-  GROUP_AFFINITY affinity, previous_affinity;
-  uint16_t i, processors;
-
-  processors = KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
-
-  for (i = 0; i < processors; i++)
-  {
-  	status = KeGetProcessorNumberFromIndex(i, &processor_number);
-    if (!NT_SUCCESS(status))
-    	return 0;
-
-    affinity.Group = processor_number.Group;
-    affinity.Mask = 1ULL << processor_number.Number;
-    affinity.Reserved[0] = affinity.Reserved[1] = affinity.Reserved[2] = 0;
-
-    KeSetSystemGroupAffinityThread(&affinity, &previous_affinity);
-
-  	bool success = callback(reinterpret_cast<void*>(reinterpret_cast<uint64_t>(ctx) + i*sizeof(GuestState)));
-
-    KeRevertToUserGroupAffinityThread(&previous_affinity);
-
-    if (!success)
-    	return i;
-    }
-  return i;
-}
 
 void SetupVirtualization(void* ctx){
 	bool CanVirt = false;
@@ -118,7 +115,7 @@ void SetupVirtualization(void* ctx){
 
 	auto processors = KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
 
-	auto SharedStruct = ExAllocatePoolWithTag(NonPagedPool, sizeof(GuestState) * processors, 'GS');
+	SharedStruct = ExAllocatePoolWithTag(NonPagedPool, sizeof(GuestState) * processors, 'GS');
 
 	if(!ExecOnEachCore(VirtualiseProcessor, SharedStruct)){
 		return;

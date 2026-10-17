@@ -4,6 +4,8 @@
 #include <intrin.h>
 #include <ntdef.h>
 
+#include "debugging.h"
+
 extern "C" void WriteMSR(uint32_t msr, uint64_t value);
 extern "C" void RunLoop(void* GuestVMCBPa);
 
@@ -114,9 +116,20 @@ struct alignas(0x1000) GuestState {
 
     Vmcb* Vmcb;           // 0x1FE0
     bool virtualised;     // 0x1FE8
-    };
+	};
   };
 };
+
+#pragma pack(push, 1)
+struct SharedComms{
+	uint64_t code;
+	uint64_t address;
+	uint64_t dataLength;
+	uint8_t buffer[0xFE8];
+};
+#pragma pack(pop)
+
+static_assert(sizeof(SharedComms) == 0x1000);
 
 static_assert(sizeof(CONTEXT) == 0x4D0);
 static_assert(offsetof(GuestState, GuestVmcbPA) == 0x1FD0);
@@ -124,4 +137,6 @@ static_assert(offsetof(GuestState, Vmcb) == 0x1FE0);
 static_assert(offsetof(GuestState, oldContext) == 0x1B00);
 
 inline PHYSICAL_ADDRESS MaxAddress {.QuadPart = MAXLONGLONG};
+inline void* SharedStruct;
+inline  SharedComms* SharedCommunication;
 bool SetupVMCB(GuestState* GS);

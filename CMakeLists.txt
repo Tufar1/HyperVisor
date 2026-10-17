@@ -23,7 +23,8 @@ add_custom_command(
 add_executable(${PROJECT_NAME}
     main.cpp
     vmcb.cpp
-    ${CMAKE_BINARY_DIR}/assembly.obj
+    debugging.cpp
+		${CMAKE_BINARY_DIR}/assembly.obj
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${WDK_INCLUDES} ${LIBCXX_INCLUDE_DIR})
