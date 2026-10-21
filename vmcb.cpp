@@ -1,4 +1,10 @@
 #include "vmcb.h"
+#include "debugging.h"
+#include "helpers.h"
+#include "ntddk.h"
+#include "structs.h"
+#include "wdm.h"
+#include <cstdint>
 
 extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
 	svm_vmload(reinterpret_cast<void*>(HostStatePA));
@@ -38,17 +44,31 @@ extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
 					break;
 				}	
 				RtlZeroMemory(SharedCommunication, 0x1000);
-				*(uint64_t*)(SharedCommunication->buffer) = targetCR3;
+				*(uint64_t*)(SharedCommunication->address) = targetCR3;
 
 				Vmcb->state.rax = 1;
 				break;
+			}
+
+			case 0x420099:{
+				if(!SetupBreakpoint(ctx->rcx, targetCR3)){
+					Vmcb->state.rax = 0;
+					break;
+				}
+				Vmcb->state.rax = 1;
 			}
 			
 			case 0x420010: { //Get Base address from name
 				auto moduleAddress = GetTargetModule(targetEProcess, reinterpret_cast<const wchar_t*>(SharedCommunication->buffer));
 
+				if(!moduleAddress){
+					Vmcb->state.rax = 0;
+					break;
+				}
+
 				RtlZeroMemory(SharedCommunication, 0x1000);
-				*(uint64_t*)(SharedCommunication->buffer) = moduleAddress;
+				Vmcb->state.rax = 1;
+				*(uint64_t*)(SharedCommunication->address) = moduleAddress;
 				break;
 			}
 			default: {
@@ -62,6 +82,62 @@ extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
 		Vmcb->state.rip = Vmcb->control.nRIP;
 
 	return 1;
+}
+
+uint64_t SetupNPT(){
+	auto pml4eAddr = MmAllocateContiguousMemory(0x1000, MaxAddress); //Page, just one entry pointing to pdpt
+	auto pdptAddr = MmAllocateContiguousMemory(0x1000, MaxAddress); //Page for all 512 pdpt entries. Each pdpt entry has 512 PDs
+	auto pdBlockAddr = MmAllocateContiguousMemory(0x1000 * 512, MaxAddress); //All 512*512 PDs
+	
+	if(!pml4eAddr || !pdptAddr || !pdBlockAddr)
+		return 0;
+
+	RtlZeroMemory(pml4eAddr, 0x1000);
+	RtlZeroMemory(pdptAddr, 0x1000);
+	RtlZeroMemory(pdBlockAddr, 0x1000 * 512);
+	
+	auto pdBlockPA = MmGetPhysicalAddress(pdBlockAddr);
+	if(!pdBlockPA.QuadPart)
+		return 0;
+
+	auto pdptPA = MmGetPhysicalAddress(pdptAddr);
+	if(!pdptPA.QuadPart)
+		return 0;
+
+	auto n_cr3 = MmGetPhysicalAddress(pml4eAddr);
+	if(!n_cr3.QuadPart)
+		return 0;
+	
+	auto pml4e = reinterpret_cast<PML4E*>(pml4eAddr);
+	auto pdpt = reinterpret_cast<PDPTE*>(pdptAddr);
+
+	pml4e->pfn = pdptPA.QuadPart >> 12;  	
+	pml4e->present = 1;
+	pml4e->us = 1;
+	pml4e->rw = 1;
+
+	for(int i = 0; i < 512; i++){
+		pdpt[i].pfn = (pdBlockPA.QuadPart + (i * 0x1000)) >> 12; //Each pfn points to 0x1000 size of PD entries. So we just jump over 512 entries for exach loop. PD entries has each PFN difference 2MB
+		
+		pdpt[i].present = 1;
+		pdpt[i].us = 1;
+		pdpt[i].rw = 1;
+
+		auto pd = reinterpret_cast<PDE*>(reinterpret_cast<uint64_t>(pdBlockAddr) + i * 0x1000);
+		
+		if(!pd)
+			continue;
+		
+		for(int j = 0; j < 512; j++){
+			pd[j].pfn = ((i * 0x40000000ULL) + (j * 0x200000ULL)) >> 12; //Once per 512 entries jump by 1Gb. Because each entry has 2mb, and theres 512 of them...
+		
+			pd[j].present = 1;
+			pd[j].us = 1;
+			pd[j].rw = 1;
+			pd[j].page_size = 1;
+		}
+	}
+	return n_cr3.QuadPart;
 }
 
 bool SetupVMCB(GuestState* GS){
@@ -92,8 +168,6 @@ bool SetupVMCB(GuestState* GS){
 	auto dr6 = ReadDR6();
 	auto dr7 = ReadDR7();
 
-	auto rsp = ReadRSP();
-
 	auto EFER = __readmsr(0xC0000080);
 
 	auto cs = ReadCS();
@@ -109,7 +183,7 @@ bool SetupVMCB(GuestState* GS){
 
 	uint64_t rflags = __readeflags();
 
-	rflags &= ~(1ULL << 9);	
+	//rflags &= ~(1ULL << 9);	
 	GS->Vmcb->state.rflags = rflags;
 
 	GS->Vmcb->state.gdtr.limit = gdtr.limit;
@@ -140,6 +214,11 @@ bool SetupVMCB(GuestState* GS){
 	GS->Vmcb->state.efer = EFER;
 
 	GS->Vmcb->state.cpl = 0;
+
+	//setup NPT
+	
+	GS->Vmcb->control.nCr3 = SetupNPT();	
+	GS->Vmcb->control.npEnable |= (1u << 0);
 
 	return true;
 }

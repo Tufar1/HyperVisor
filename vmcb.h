@@ -28,9 +28,13 @@ extern "C" void svm_vmload(void* VMCBPA);
 
 extern "C" NTSYSAPI VOID NTAPI RtlCaptureContext(_Out_ PCONTEXT ContextRecord);
 
-inline PHYSICAL_ADDRESS MaxAddress {.QuadPart = MAXLONGLONG};
-inline void* SharedStruct;
-inline  SharedComms* SharedCommunication;
-inline  uint64_t targetEProcess;
-inline  uint64_t targetCR3;
 bool SetupVMCB(GuestState* GS);
+
+inline PHYSICAL_ADDRESS MaxAddress {.QuadPart = MAXLONGLONG};
+
+inline SharedComms* SharedCommunication;
+inline void* SharedStruct;
+
+inline uint64_t targetEProcess;
+inline uint64_t targetCR3;
+inline uint64_t nestedCR3;

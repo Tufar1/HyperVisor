@@ -38,7 +38,7 @@ int main() {
         SetThreadAffinityMask(GetCurrentThread(), mask);
         
         // dej OS chvilku aby thread opravdu přesunul
-        Sleep(1);
+        Sleep(100);
         
         vmmcall(0,0);
     }
@@ -63,10 +63,7 @@ i++;
 	uint64_t result = vmmcall(0x420001, reinterpret_cast<uint64_t>(sharedAddress));
 
   printf("RAX po VMMCALL: 0x%llX\n", (unsigned long long)result);
-	printf("HV response: %s\n", (char*)shared->buffer);
-	printf("HV response: 0x%llX\n", *(uint64_t*)shared->buffer);
-	
-	printf("result: %i\n", result);
+	printf("HV response: 0x%llX\n", *(uint64_t*)shared->address);
 
 	Sleep(5000);
 
@@ -82,10 +79,11 @@ dst2[i] = L'\0';
 	result = vmmcall(0x420010, 0);
 
   printf("RAX po VMMCALL: 0x%llX\n", (unsigned long long)result);
-	printf("HV response: %s\n", (char*)shared->buffer);
-	printf("HV response: 0x%llX\n", *(uint64_t*)shared->buffer);
-	
-	printf("result: %i\n", result);
+	printf("HV response: 0x%llX\n", *(uint64_t*)shared->address);
+
+	result = vmmcall(0x420099, *(uint64_t*)shared->address + 0x7F70);
+
+  printf("RAX po VMMCALL: 0x%llX\n", (unsigned long long)result);
 	
 	system("pause");
   return 0;

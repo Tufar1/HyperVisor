@@ -25,52 +25,58 @@ struct GuestContext {
 #pragma pack(pop)
 
 struct VmcbControlArea {
-    uint8_t  reserved1[0xC];           // 0x00
-    uint32_t interceptMisc1;           // 0x0C
-    uint32_t interceptMisc2;           // 0x10
-    uint8_t  reserved2[0x2C];          // 0x14 - 0x3F
-    uint64_t iopmBasePA;               // 0x40
-    uint64_t msrpmBasePA;              // 0x48
-    uint8_t  reserved3[0x08];          // 0x50
-    uint32_t guestASID;                // 0x58
-    uint32_t tlbControl;
-    uint8_t  reserved4[0x10];          // 0x60 - 0x77
-    uint64_t exitCode;                 // 0x70
-    uint64_t exitInfo1;                // 0x78
-    uint64_t exitInfo2;                // 0x80
-    uint8_t  reserved6[0x40];          // 0x88 - 0xC7
-    uint64_t nRIP;                     // 0xC8
-    uint8_t  reserved5[0x330];         // 0xD0
+    uint8_t  reserved1[0xC];           // 0x000
+    uint32_t interceptMisc1;           // 0x00C
+    uint32_t interceptMisc2;           // 0x010
+    uint8_t  reserved2[0x2C];          // 0x014 - 0x03F
+    uint64_t iopmBasePA;               // 0x040
+    uint64_t msrpmBasePA;              // 0x048
+    uint8_t  reserved3[0x08];          // 0x050
+    uint32_t guestASID;                // 0x058
+    uint32_t tlbControl;               // 0x05C
+    uint8_t  reserved4[0x10];          // 0x060 - 0x06F
+    uint64_t exitCode;                 // 0x070
+    uint64_t exitInfo1;                // 0x078
+    uint64_t exitInfo2;                // 0x080
+    uint8_t  reserved5[0x8];           // 0x088 - 0x08F
+    uint64_t npEnable;                 // 0x090 
+    uint8_t  reserved6[0x18];          // 0x098 - 0x0AF
+    uint64_t nCr3;                     // 0x0B0
+    uint8_t  reserved7[0x10];          // 0x0B8 - 0x0C7
+    uint64_t nRIP;                     // 0x0C8
+    uint8_t  reserved8[0x330];         // 0x0D0 - 0x3FF
 };
 static_assert(sizeof(VmcbControlArea) == 0x400, "Control Area size mismatch");
 
 struct VmcbStateArea {
-    VmcbSegment es;                    // 0x400
-    VmcbSegment cs;                    // 0x410
-    VmcbSegment ss;                    // 0x420
-    VmcbSegment ds;                    // 0x430
-    VmcbSegment fs;                    // 0x440
-    VmcbSegment gs;                    // 0x450
-    VmcbSegment gdtr;                  // 0x460
-    VmcbSegment ldtr;                  // 0x470
-    VmcbSegment idtr;                  // 0x480
-    VmcbSegment tr;                    // 0x490
-    uint8_t     reserved1[0x2B];       // 0x4A0 - 0x4CA
-    uint8_t     cpl;                   // 0x4CB
-    uint32_t    reserved2;             // 0x4CC
-    uint64_t    efer;                  // 0x4D0
-    uint8_t     reserved3[0x70];       // 0x4D8 - 0x547
-    uint64_t    cr4;                   // 0x548
-    uint64_t    cr3;                   // 0x550
-    uint64_t    cr0;                   // 0x558
-    uint64_t    dr7;                   // 0x560
-    uint64_t    dr6;                   // 0x568
-    uint64_t    rflags;                // 0x570
-    uint64_t    rip;                   // 0x578
-    uint8_t     reserved4[0x58];       // 0x580 - 0x5D7
-    uint64_t    rsp;                   // 0x5D8
-    uint8_t     reserved5[0x18];       // 0x5E0 - 0x5F7
-    uint64_t    rax;                   // 0x5F8
+    VmcbSegment es;                    // 0x000
+    VmcbSegment cs;                    // 0x010
+    VmcbSegment ss;                    // 0x020
+    VmcbSegment ds;                    // 0x030
+    VmcbSegment fs;                    // 0x040
+    VmcbSegment gs;                    // 0x050
+    VmcbSegment gdtr;                  // 0x060
+    VmcbSegment ldtr;                  // 0x070
+    VmcbSegment idtr;                  // 0x080
+    VmcbSegment tr;                    // 0x090
+    uint8_t     reserved1[0x2B];       // 0x0A0 - 0x0CA
+    uint8_t     cpl;                   // 0x0CB
+    uint32_t    reserved2;             // 0x0CC
+    uint64_t    efer;                  // 0x0D0
+    uint8_t     reserved3[0x70];       // 0x0D8 - 0x147
+    uint64_t    cr4;                   // 0x148
+    uint64_t    cr3;                   // 0x150
+    uint64_t    cr0;                   // 0x158
+    uint64_t    dr7;                   // 0x160
+    uint64_t    dr6;                   // 0x168
+    uint64_t    rflags;                // 0x170
+    uint64_t    rip;                   // 0x178
+    uint8_t     reserved4[0x58];       // 0x180 - 0x1D7
+    uint64_t    rsp;                   // 0x1D8
+    uint8_t     reserved5[0x18];       // 0x1E0 - 0x1F7
+    uint64_t    rax;                   // 0x1F8
+    uint8_t     reserved6[0x68];       // 0x200 - 0x267
+    uint64_t    gPAT;                  // 0x268
 };
 
 struct Vmcb {
