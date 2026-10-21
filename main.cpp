@@ -1,6 +1,7 @@
-#include "vmcb.h"
-#include "wdm.h"
 #include <cstdint>
+
+#include "structs.h"
+#include "vmcb.h"
 
 typedef bool (*callback)(PVOID ctx);
 

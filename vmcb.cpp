@@ -1,48 +1,4 @@
 #include "vmcb.h"
-#include "debugging.h"
-#include "ntddk.h"
-#include "wdm.h"
-#include <cstdint>
-#include <ntdef.h>
-
-void DumpVMCB(void* vmcb, size_t from, size_t to) {
-	auto* base = reinterpret_cast<uint8_t*>(vmcb);
-	for (size_t off = from; off < to; off += 8) {
-  	uint64_t v = *reinterpret_cast<uint64_t*>(base + off);
-    if (v) {
-    	DbgPrintEx(0, 0, "VMCB[0x%03llX] = 0x%016llX\n", (uint64_t)off, v);
-    }
-  }
-}
-
-VmcbSegment GetSegmentFromGDT(uint16_t selector) {
-  VmcbSegment seg{};
-  seg.selector = selector;
-
-  if ((selector & ~0x7) == 0) {
-    return seg;
-  }
-
-  GDTR gdtr;
-  ReadGDT(&gdtr);
-
-  uint64_t descAddr = gdtr.base + (selector & ~0x7);
-  uint64_t desc = *reinterpret_cast<uint64_t*>(descAddr);
-
-  uint32_t limit_low   = static_cast<uint32_t>(desc & 0xFFFF);
-  uint32_t base_low    = static_cast<uint32_t>((desc >> 16) & 0xFFFFFF);
-  uint8_t  accessByte  = static_cast<uint8_t>((desc >> 40) & 0xFF);
-  uint32_t limit_high  = static_cast<uint32_t>((desc >> 48) & 0xF);
-  uint8_t  flags       = static_cast<uint8_t>((desc >> 52) & 0xF);
-  uint32_t base_high   = static_cast<uint32_t>((desc >> 56) & 0xFF);
-
-  seg.limit = limit_low | (limit_high << 16);
-  seg.base  = base_low | (static_cast<uint64_t>(base_high) << 24);
-
-  seg.attrib = static_cast<uint16_t>(accessByte) | (static_cast<uint16_t>(flags) << 8);
-
-  return seg;
-}
 
 extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
 	svm_vmload(reinterpret_cast<void*>(HostStatePA));
@@ -56,9 +12,7 @@ extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
 	if(ExitCode == 0x81){
 		switch (Vmcb->state.rax){
 			case 0x420001: {//INIT, map allocated page to our driver for simpler communication and set target cr3
-				targetCR3 = Vmcb->state.cr3;
-
-				auto MapTranslated = GetTargetPAFromVA(ctx->rcx);
+				auto MapTranslated = GetTargetPAFromVA(ctx->rcx, Vmcb->state.cr3);
 				if(!MapTranslated){
 					Vmcb->state.rax = 5;
 					break;
@@ -77,7 +31,7 @@ extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
 
 				auto name = reinterpret_cast<char*>(SharedCommunication->buffer);	
 
-				targetCR3 = GetCR3FromName(name);
+				targetCR3 = GetCR3FromName(name, targetEProcess);
 
 				if(!targetCR3){
 					Vmcb->state.rax = 3;
@@ -91,7 +45,7 @@ extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
 			}
 			
 			case 0x420010: { //Get Base address from name
-				auto moduleAddress = GetTargetModuleBase();
+				auto moduleAddress = GetTargetModule(targetEProcess, reinterpret_cast<const wchar_t*>(SharedCommunication->buffer));
 
 				RtlZeroMemory(SharedCommunication, 0x1000);
 				*(uint64_t*)(SharedCommunication->buffer) = moduleAddress;
@@ -186,9 +140,6 @@ bool SetupVMCB(GuestState* GS){
 	GS->Vmcb->state.efer = EFER;
 
 	GS->Vmcb->state.cpl = 0;
-
-	//DumpVMCB(GS->Vmcb, 0x000, 0x400);   // Control Area
-	//DumpVMCB(GS->Vmcb, 0x400, 0x700);   // State Save Area	
 
 	return true;
 }

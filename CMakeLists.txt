@@ -24,6 +24,8 @@ add_executable(${PROJECT_NAME}
     main.cpp
     vmcb.cpp
     debugging.cpp
+		memory.cpp
+		helpers.cpp
 		${CMAKE_BINARY_DIR}/assembly.obj
 )
 
