@@ -1,10 +1,4 @@
 #include "vmcb.h"
-#include "debugging.h"
-#include "helpers.h"
-#include "ntddk.h"
-#include "structs.h"
-#include "wdm.h"
-#include <cstdint>
 
 extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
 	svm_vmload(reinterpret_cast<void*>(HostStatePA));
@@ -42,9 +36,10 @@ extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
 				if(!targetCR3){
 					Vmcb->state.rax = 3;
 					break;
-				}	
+				}
+
 				RtlZeroMemory(SharedCommunication, 0x1000);
-				*(uint64_t*)(SharedCommunication->address) = targetCR3;
+				SharedCommunication->address = targetCR3;
 
 				Vmcb->state.rax = 1;
 				break;
@@ -68,7 +63,7 @@ extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
 
 				RtlZeroMemory(SharedCommunication, 0x1000);
 				Vmcb->state.rax = 1;
-				*(uint64_t*)(SharedCommunication->address) = moduleAddress;
+				SharedCommunication->address = moduleAddress;
 				break;
 			}
 			default: {
@@ -183,7 +178,8 @@ bool SetupVMCB(GuestState* GS){
 
 	uint64_t rflags = __readeflags();
 
-	//rflags &= ~(1ULL << 9);	
+	rflags &= ~(1ULL << 9);	
+	
 	GS->Vmcb->state.rflags = rflags;
 
 	GS->Vmcb->state.gdtr.limit = gdtr.limit;

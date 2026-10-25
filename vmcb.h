@@ -6,6 +6,7 @@
 
 #include "structs.h"
 #include "helpers.h"
+#include "debugging.h"
 
 extern "C" void WriteMSR(uint32_t msr, uint64_t value);
 extern "C" void RunLoop(void* GuestVMCBPa);
