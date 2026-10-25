@@ -80,11 +80,18 @@ int main() {
 
   printf("RAX po VMMCALL: 0x%llX\n", (unsigned long long)result);
 	printf("HV response: 0x%llX\n", shared->address);
+	
+	auto openglBase = shared->address;
 
-	result = vmmcall(0x420099, shared->address + 0x7F70);
+	shared->address = openglBase + 0x7F70; 
+	result = vmmcall(0x420099, 0);
 
   printf("RAX po VMMCALL: 0x%llX\n", (unsigned long long)result);
-	
+
+	while(true){
+		Sleep(100);
+	}
+
 	system("pause");
   return 0;
 }

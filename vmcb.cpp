@@ -1,14 +1,17 @@
 #include "vmcb.h"
+#include "debugging.h"
+#include "helpers.h"
+#include "ntddk.h"
+#include "wdm.h"
+#include <cstdint>
 
-extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
+extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA, uint64_t* pendingPA) {
 	svm_vmload(reinterpret_cast<void*>(HostStatePA));
 
 	auto ExitCode = Vmcb->control.exitCode;
 	auto Info1 = Vmcb->control.exitInfo1;
 	auto Info2 = Vmcb->control.exitInfo2;
- 
-	DbgPrintEx(0,0,"Exitcode: %llx\n", ExitCode);
-
+	
 	if(ExitCode == 0x81){
 		switch (Vmcb->state.rax){
 			case 0x420001: {//INIT, map allocated page to our driver for simpler communication and set target cr3
@@ -46,11 +49,13 @@ extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
 			}
 
 			case 0x420099:{
-				if(!SetupBreakpoint(ctx->rcx, targetCR3)){
+				if(!SetupBreakpoint(SharedCommunication->address, targetCR3)){
 					Vmcb->state.rax = 0;
 					break;
 				}
+				Vmcb->control.tlbControl = 1;
 				Vmcb->state.rax = 1;
+				break;
 			}
 			
 			case 0x420010: { //Get Base address from name
@@ -73,6 +78,37 @@ extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
 		}
 	}
 
+	if(ExitCode == 0x400){
+    auto errorCode = Vmcb->control.exitInfo1;
+    if(errorCode & (1 << 4)){
+        
+      bool mine = false;
+      auto faultRIPPA = GetTargetPAFromVA(Vmcb->state.rip, targetCR3);
+
+      for(int i = 0; i < breakpointCount; i++){
+      	if(faultRIPPA == breakpoints[i].guestPA){
+        	mine = true;
+          break;
+        }
+      }
+
+      if(mine){
+      	DbgPrintEx(0,0, "RIP: %llx RCX: %llx\n", Vmcb->state.rip, ctx->rcx);
+        SharedCommunication->address = Vmcb->state.rip;
+      }
+
+      SetNX(faultRIPPA, 0);
+      Vmcb->control.tlbControl = 1;
+			Vmcb->state.rflags |= (1 << 8); 
+			*pendingPA = faultRIPPA;
+    }
+	}
+
+	if(ExitCode == 0x41){
+    SetNX(*pendingPA, 1);
+    Vmcb->control.tlbControl = 1;
+	}
+	
 	if(Vmcb->control.nRIP)
 		Vmcb->state.rip = Vmcb->control.nRIP;
 
@@ -82,7 +118,7 @@ extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
 uint64_t SetupNPT(){
 	auto pml4eAddr = MmAllocateContiguousMemory(0x1000, MaxAddress); //Page, just one entry pointing to pdpt
 	auto pdptAddr = MmAllocateContiguousMemory(0x1000, MaxAddress); //Page for all 512 pdpt entries. Each pdpt entry has 512 PDs
-	auto pdBlockAddr = MmAllocateContiguousMemory(0x1000 * 512, MaxAddress); //All 512*512 PDs
+	pdBlockAddr = MmAllocateContiguousMemory(0x1000 * 512, MaxAddress); //All 512*512 PDs
 	
 	if(!pml4eAddr || !pdptAddr || !pdBlockAddr)
 		return 0;
@@ -137,7 +173,9 @@ uint64_t SetupNPT(){
 
 bool SetupVMCB(GuestState* GS){
 	//Control Area	
-  
+	
+	GS->Vmcb->control.interceptExceptions |= (1u << 1); // #DB vector 1	
+
 	GS->Vmcb->control.interceptMisc2 |= (1u << 0);// - vmrun
 	GS->Vmcb->control.interceptMisc2 |= (1u << 1);// - vmmcall
 	
@@ -178,8 +216,6 @@ bool SetupVMCB(GuestState* GS){
 
 	uint64_t rflags = __readeflags();
 
-	rflags &= ~(1ULL << 9);	
-	
 	GS->Vmcb->state.rflags = rflags;
 
 	GS->Vmcb->state.gdtr.limit = gdtr.limit;
@@ -212,8 +248,13 @@ bool SetupVMCB(GuestState* GS){
 	GS->Vmcb->state.cpl = 0;
 
 	//setup NPT
-	
-	GS->Vmcb->control.nCr3 = SetupNPT();	
+
+	auto n_cr3 = SetupNPT();
+
+	if(!n_cr3)
+		return 0;
+
+	GS->Vmcb->control.nCr3 = n_cr3;	
 	GS->Vmcb->control.npEnable |= (1u << 0);
 
 	return true;

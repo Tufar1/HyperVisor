@@ -38,4 +38,4 @@ inline void* SharedStruct;
 
 inline uint64_t targetEProcess;
 inline uint64_t targetCR3;
-inline uint64_t nestedCR3;
+inline void* pdBlockAddr;

@@ -36,11 +36,12 @@ START:
 	mov rcx, rsp
 	
 	; 14x8 = 112 = 0x70
-	; 0x70 + 0x200 shadow = 0x270
+	; 0x70 + 0x300 shadow = 0x370
 	; Vmcb* is 0x10 apart from GuestVmcbPa
 
 	mov rdx, [rsp + 380h]
 	mov r8, [rsp + 378h]
+	lea r9, [rsp + 390h]
 
 	sub rsp, 20h
 	call HandleExit

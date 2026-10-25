@@ -25,7 +25,9 @@ struct GuestContext {
 #pragma pack(pop)
 
 struct VmcbControlArea {
-    uint8_t  reserved1[0xC];           // 0x000
+    uint32_t interceptCR;              // 0x000
+    uint32_t interceptDR;              // 0x004
+    uint32_t interceptExceptions;      // 0x008
     uint32_t interceptMisc1;           // 0x00C
     uint32_t interceptMisc2;           // 0x010
     uint8_t  reserved2[0x2C];          // 0x014 - 0x03F
@@ -91,12 +93,14 @@ struct alignas(0x1000) GuestState {
   struct {
   	uint8_t StackContents[0x1B00];
 
-    CONTEXT oldContext;  // 0x1B00
+    
+		CONTEXT oldContext;  // 0x1B00
     PHYSICAL_ADDRESS GuestVmcbPA; // 0x1FD0
     uint64_t HostVmcbPA;  // 0x1FD8
 
     Vmcb* Vmcb;           // 0x1FE0
     bool virtualised;     // 0x1FE8
+		uint64_t pendingPA; 	// 0x1FF0
 	};
   };
 };
@@ -109,6 +113,12 @@ struct SharedComms{
 	uint8_t buffer[0xFE8];
 };
 #pragma pack(pop)
+
+struct NptBreakpoint {
+  uint64_t guestPA;
+	uint64_t guestVA;
+  bool     active;
+};
 
 union PML4E {
     std::uint64_t value;
@@ -242,3 +252,4 @@ static_assert(sizeof(CONTEXT) == 0x4D0);
 static_assert(offsetof(GuestState, GuestVmcbPA) == 0x1FD0);
 static_assert(offsetof(GuestState, Vmcb) == 0x1FE0);
 static_assert(offsetof(GuestState, oldContext) == 0x1B00);
+static_assert(offsetof(GuestState, pendingPA) == 0x1FF0);
