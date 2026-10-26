@@ -14,6 +14,26 @@ static inline uint64_t vmmcall(uint64_t rax_in, uint64_t rcx_in) {
     return rax_out;
 }
 
+struct BreakpointHit{
+	bool newHit;
+  ULONG64 Rax;
+  ULONG64 Rcx;
+  ULONG64 Rdx;
+  ULONG64 Rbx;
+  ULONG64 Rsp;
+  ULONG64 Rbp;
+  ULONG64 Rsi;
+  ULONG64 Rdi;
+  ULONG64 R8;
+  ULONG64 R9;
+  ULONG64 R10;
+  ULONG64 R11;
+  ULONG64 R12;
+  ULONG64 R13;
+  ULONG64 R14;
+  ULONG64 R15;
+};
+
 #pragma pack(push, 1)
 struct SharedComms{
 	uint64_t code;
@@ -87,9 +107,18 @@ int main() {
 	result = vmmcall(0x420099, 0);
 
   printf("RAX po VMMCALL: 0x%llX\n", (unsigned long long)result);
-
+	auto regs = reinterpret_cast<BreakpointHit*>(shared->buffer);
+	
 	while(true){
-		Sleep(100);
+  	if(regs->newHit){
+    	printf("BP hit!\n");
+      printf("RAX: %llx  RCX: %llx  RDX: %llx  RBX: %llx\n", regs->Rax, regs->Rcx, regs->Rdx, regs->Rbx);
+      printf("RSP: %llx  RBP: %llx  RSI: %llx  RDI: %llx\n", regs->Rsp, regs->Rbp, regs->Rsi, regs->Rdi);
+      printf("R8:  %llx  R9:  %llx  R10: %llx  R11: %llx\n", regs->R8,  regs->R9,  regs->R10, regs->R11);
+      printf("R12: %llx  R13: %llx  R14: %llx  R15: %llx\n", regs->R12, regs->R13, regs->R14, regs->R15);
+      regs->newHit = 0;
+    }
+    Sleep(1);
 	}
 
 	system("pause");

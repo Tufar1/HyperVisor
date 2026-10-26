@@ -2,6 +2,7 @@
 #include "debugging.h"
 #include "helpers.h"
 #include "ntddk.h"
+#include "structs.h"
 #include "wdm.h"
 #include <cstdint>
 
@@ -11,7 +12,7 @@ extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA, u
 	auto ExitCode = Vmcb->control.exitCode;
 	auto Info1 = Vmcb->control.exitInfo1;
 	auto Info2 = Vmcb->control.exitInfo2;
-	
+
 	if(ExitCode == 0x81){
 		switch (Vmcb->state.rax){
 			case 0x420001: {//INIT, map allocated page to our driver for simpler communication and set target cr3
@@ -86,27 +87,49 @@ extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA, u
       auto faultRIPPA = GetTargetPAFromVA(Vmcb->state.rip, targetCR3);
 
       for(int i = 0; i < breakpointCount; i++){
-      	if(faultRIPPA == breakpoints[i].guestPA){
+      	if(Vmcb->state.rip == breakpoints[i].guestVA){
         	mine = true;
           break;
         }
       }
 
       if(mine){
-      	DbgPrintEx(0,0, "RIP: %llx RCX: %llx\n", Vmcb->state.rip, ctx->rcx);
+				RtlZeroMemory(SharedCommunication, 0x1000);
         SharedCommunication->address = Vmcb->state.rip;
+				auto regs = reinterpret_cast<BreakpointHit*>(SharedCommunication->buffer);
+				regs->newHit = 1;
+				regs->Rax = Vmcb->state.rax;
+    		regs->Rcx = ctx->rcx;
+    		regs->Rdx = ctx->rdx;
+    		regs->Rbx = ctx->rbx;
+    		regs->Rsp = Vmcb->state.rsp;
+    		regs->Rbp = ctx->rbp;
+    		regs->Rsi = ctx->rsi;
+    		regs->Rdi = ctx->rdi;
+    		regs->R8  = ctx->r8;
+    		regs->R9  = ctx->r9;
+    		regs->R10  = ctx->r10;
+    		regs->R11= ctx->r11;
+    		regs->R12 = ctx->r12;
+    		regs->R13 = ctx->r13;
+    		regs->R14 = ctx->r14;
+    		regs->R15 = ctx->r15;
       }
 
       SetNX(faultRIPPA, 0);
       Vmcb->control.tlbControl = 1;
 			Vmcb->state.rflags |= (1 << 8); 
-			*pendingPA = faultRIPPA;
+			//*pendingPA = faultRIPPA;
     }
 	}
 
 	if(ExitCode == 0x41){
-    SetNX(*pendingPA, 1);
+		for(int i = 0; i < breakpointCount; i++){
+			SetNX(breakpoints[i].guestPA, 1);
+		}
+
     Vmcb->control.tlbControl = 1;
+		Vmcb->state.rflags &= ~(1 << 8); 
 	}
 	
 	if(Vmcb->control.nRIP)

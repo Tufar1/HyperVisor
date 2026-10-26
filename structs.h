@@ -120,6 +120,26 @@ struct NptBreakpoint {
   bool     active;
 };
 
+struct BreakpointHit{
+	bool newHit;
+  ULONG64 Rax;
+  ULONG64 Rcx;
+  ULONG64 Rdx;
+  ULONG64 Rbx;
+  ULONG64 Rsp;
+  ULONG64 Rbp;
+  ULONG64 Rsi;
+  ULONG64 Rdi;
+  ULONG64 R8;
+  ULONG64 R9;
+  ULONG64 R10;
+  ULONG64 R11;
+  ULONG64 R12;
+  ULONG64 R13;
+  ULONG64 R14;
+  ULONG64 R15;
+};
+
 union PML4E {
     std::uint64_t value;
     struct {
