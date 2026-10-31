@@ -117,7 +117,8 @@ struct SharedComms{
 struct NptBreakpoint {
   uint64_t guestPA;
 	uint64_t guestVA;
-  bool     active;
+  bool active;
+	bool doBlocking;
 };
 
 struct BreakpointHit{

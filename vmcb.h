@@ -36,6 +36,8 @@ inline PHYSICAL_ADDRESS MaxAddress {.QuadPart = MAXLONGLONG};
 inline SharedComms* SharedCommunication;
 inline void* SharedStruct;
 
+inline int blockedCore = -1;
+
 inline uint64_t targetEProcess;
 inline uint64_t targetCR3;
 inline void* pdBlockAddr;

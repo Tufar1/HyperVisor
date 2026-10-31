@@ -50,24 +50,20 @@ int test(int a, int b){
 }
 
 int main() {
-    DWORD coreCount = std::thread::hardware_concurrency();
-    
-    for (DWORD i = 0; i < coreCount; i++) {
-        // přesuň current thread na core i
-        DWORD_PTR mask = 1ULL << i;
-        SetThreadAffinityMask(GetCurrentThread(), mask);
-        
-        // dej OS chvilku aby thread opravdu přesunul
-        Sleep(100);
-        
-        vmmcall(0,0);
-    }
-    
-    SetThreadAffinityMask(GetCurrentThread(), (1ULL << coreCount) - 1);
+  DWORD coreCount = std::thread::hardware_concurrency(); 
+  for (DWORD i = 0; i < coreCount; i++) {
+  	DWORD_PTR mask = 1ULL << i;
 
+  	SetThreadAffinityMask(GetCurrentThread(), mask);
+    Sleep(100);      
+    vmmcall(0,0);
+  }
+  
+	SetThreadAffinityMask(GetCurrentThread(), (1ULL << coreCount) - 1);
 
 	auto sharedAddress = VirtualAlloc(nullptr, 0x1000, MEM_COMMIT | MEM_RESERVE,PAGE_READWRITE);
 	printf("Allocated on: 0x%llX\n", sharedAddress);
+
 	auto shared = reinterpret_cast<SharedComms*>(sharedAddress);
 
 	char* dst = (char*)shared->buffer;
@@ -101,6 +97,8 @@ int main() {
   printf("RAX po VMMCALL: 0x%llX\n", (unsigned long long)result);
 	printf("HV response: 0x%llX\n", shared->address);
 	
+	Sleep(5000);
+	
 	auto openglBase = shared->address;
 
 	shared->address = openglBase + 0x7F70; 
@@ -117,7 +115,9 @@ int main() {
       printf("R8:  %llx  R9:  %llx  R10: %llx  R11: %llx\n", regs->R8,  regs->R9,  regs->R10, regs->R11);
       printf("R12: %llx  R13: %llx  R14: %llx  R15: %llx\n", regs->R12, regs->R13, regs->R14, regs->R15);
       regs->newHit = 0;
-    }
+    	Sleep(2000);
+    	vmmcall(0x420090, 0);
+		}
     Sleep(1);
 	}
 

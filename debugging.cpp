@@ -55,12 +55,12 @@ bool SetNX(uint64_t guestPA, bool value) {
 }
 
 
-bool SetupBreakpoint(uint64_t addressToDebug, uint64_t targetCR3){
+bool SetupBreakpoint(uint64_t addressToDebug, uint64_t targetCR3, bool doBlocking){
 	auto addressToDebugPA = GetTargetPAFromVA(addressToDebug, targetCR3);		
 	if(!addressToDebugPA)
 		return 0;
 
-	breakpoints[breakpointCount++] = {addressToDebugPA, addressToDebug, true};
+	breakpoints[breakpointCount++] = {addressToDebugPA, addressToDebug, true, doBlocking};
 
 	return SetNX(addressToDebugPA, 1);
 }

@@ -1,17 +1,19 @@
 #include "vmcb.h"
-#include "debugging.h"
-#include "helpers.h"
-#include "ntddk.h"
-#include "structs.h"
-#include "wdm.h"
-#include <cstdint>
 
-extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA, uint64_t* pendingPA) {
+extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
 	svm_vmload(reinterpret_cast<void*>(HostStatePA));
 
 	auto ExitCode = Vmcb->control.exitCode;
 	auto Info1 = Vmcb->control.exitInfo1;
 	auto Info2 = Vmcb->control.exitInfo2;
+
+	if(ExitCode == 0x41 && Vmcb->state.rax == 0x420090)
+		blockedCore == -2;
+
+	if(blockedCore == KeGetCurrentProcessorIndex()){
+		Vmcb->control.nRIP = 0;
+		return 1;
+	}
 
 	if(ExitCode == 0x81){
 		switch (Vmcb->state.rax){
@@ -50,7 +52,7 @@ extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA, u
 			}
 
 			case 0x420099:{
-				if(!SetupBreakpoint(SharedCommunication->address, targetCR3)){
+				if(!SetupBreakpoint(SharedCommunication->address, targetCR3, SharedCommunication->code == 1)){
 					Vmcb->state.rax = 0;
 					break;
 				}
@@ -86,7 +88,9 @@ extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA, u
       bool mine = false;
       auto faultRIPPA = GetTargetPAFromVA(Vmcb->state.rip, targetCR3);
 
-      for(int i = 0; i < breakpointCount; i++){
+			int i;
+
+      for(i = 0; i < breakpointCount; i++){
       	if(Vmcb->state.rip == breakpoints[i].guestVA){
         	mine = true;
           break;
@@ -97,7 +101,9 @@ extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA, u
 				RtlZeroMemory(SharedCommunication, 0x1000);
         SharedCommunication->address = Vmcb->state.rip;
 				auto regs = reinterpret_cast<BreakpointHit*>(SharedCommunication->buffer);
+
 				regs->newHit = 1;
+
 				regs->Rax = Vmcb->state.rax;
     		regs->Rcx = ctx->rcx;
     		regs->Rdx = ctx->rdx;
@@ -114,12 +120,19 @@ extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA, u
     		regs->R13 = ctx->r13;
     		regs->R14 = ctx->r14;
     		regs->R15 = ctx->r15;
+
+				if(breakpoints[i].doBlocking && blockedCore == -1){
+					blockedCore = KeGetCurrentProcessorIndex();
+					Vmcb->control.nRIP = 0;
+					return 1;
+				}
       }
+			
+			blockedCore = -1;
 
       SetNX(faultRIPPA, 0);
       Vmcb->control.tlbControl = 1;
 			Vmcb->state.rflags |= (1 << 8); 
-			//*pendingPA = faultRIPPA;
     }
 	}
 
