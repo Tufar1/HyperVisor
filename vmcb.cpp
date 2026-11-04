@@ -7,14 +7,6 @@ extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
 	auto Info1 = Vmcb->control.exitInfo1;
 	auto Info2 = Vmcb->control.exitInfo2;
 
-	if(ExitCode == 0x41 && Vmcb->state.rax == 0x420090)
-		blockedCore == -2;
-
-	if(blockedCore == KeGetCurrentProcessorIndex()){
-		Vmcb->control.nRIP = 0;
-		return 1;
-	}
-
 	if(ExitCode == 0x81){
 		switch (Vmcb->state.rax){
 			case 0x420001: {//INIT, map allocated page to our driver for simpler communication and set target cr3
@@ -48,6 +40,11 @@ extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
 				SharedCommunication->address = targetCR3;
 
 				Vmcb->state.rax = 1;
+				break;
+			}
+
+			case 0x420090:{
+				blocked = false;
 				break;
 			}
 
@@ -121,15 +118,11 @@ extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
     		regs->R14 = ctx->r14;
     		regs->R15 = ctx->r15;
 
-				if(breakpoints[i].doBlocking && blockedCore == -1){
-					blockedCore = KeGetCurrentProcessorIndex();
-					Vmcb->control.nRIP = 0;
-					return 1;
+				while(blocked){
+					regs->R15 = ctx->r15;
 				}
       }
 			
-			blockedCore = -1;
-
       SetNX(faultRIPPA, 0);
       Vmcb->control.tlbControl = 1;
 			Vmcb->state.rflags |= (1 << 8); 
