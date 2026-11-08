@@ -1,4 +1,14 @@
 #include "vmcb.h"
+#include "wdm.h"
+
+void InjectEvent(Vmcb* Vmcb, uint64_t Vector, uint64_t Type, bool EV, bool Valid, uint64_t ErrorCode){
+	Vmcb->control.eventinj =
+    	(Vector)             |
+    	(Type)        << 8   |
+    	(EV)          << 11  |
+    	(Valid         << 31)  |
+    	(ErrorCode)   << 32;
+}
 
 extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
 	svm_vmload(reinterpret_cast<void*>(HostStatePA));
@@ -7,8 +17,35 @@ extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
 	auto Info1 = Vmcb->control.exitInfo1;
 	auto Info2 = Vmcb->control.exitInfo2;
 
+	auto rax = Vmcb->state.rax;
+
+	//Hide hypervisor
+	if(ExitCode == 0x72){
+		int regs[4];
+		__cpuidex(regs, rax, 0);
+		if(rax == 1 || rax == 0x80000001ULL){
+			Vmcb->state.rax = regs[0];
+			ctx->rbx = regs[1];
+			ctx->rcx = ((regs[2]) &= ~(1 << 31));
+			ctx->rdx = regs[3];
+		}
+		else if(rax >= 0x40000000ULL && rax <= 0x4000000F){
+			Vmcb->state.rax = rax;
+			ctx->rbx = 0ULL;
+			ctx->rcx = 0ULL; 
+			ctx->rdx = 0ULL;	
+		}
+		else{
+			Vmcb->state.rax = regs[0];
+			ctx->rbx = regs[1];
+			ctx->rcx = regs[2];
+			ctx->rdx = regs[3];
+		}
+		goto FINISH;
+	}
+
 	if(ExitCode == 0x81){
-		switch (Vmcb->state.rax){
+		switch (rax){
 			case 0x420001: {//INIT, map allocated page to our driver for simpler communication and set target cr3
 				auto MapTranslated = GetTargetPAFromVA(ctx->rcx, Vmcb->state.cr3);
 				if(!MapTranslated){
@@ -43,11 +80,6 @@ extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
 				break;
 			}
 
-			case 0x420090:{
-				blocked = false;
-				break;
-			}
-
 			case 0x420099:{
 				if(!SetupBreakpoint(SharedCommunication->address, targetCR3, SharedCommunication->code == 1)){
 					Vmcb->state.rax = 0;
@@ -72,8 +104,8 @@ extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
 				break;
 			}
 			default: {
+				InjectEvent(Vmcb, 0x6, 3, 0, 1, 0);//UD
 				break;
-				//trigger ud
 			}
 		}
 	}
@@ -118,9 +150,7 @@ extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
     		regs->R14 = ctx->r14;
     		regs->R15 = ctx->r15;
 
-				while(blocked){
-					regs->R15 = ctx->r15;
-				}
+				while(!regs->newHit){}
       }
 			
       SetNX(faultRIPPA, 0);
@@ -138,8 +168,10 @@ extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
 		Vmcb->state.rflags &= ~(1 << 8); 
 	}
 	
-	if(Vmcb->control.nRIP)
-		Vmcb->state.rip = Vmcb->control.nRIP;
+FINISH:
+
+	if (Vmcb->control.nRIP)
+    Vmcb->state.rip = Vmcb->control.nRIP;
 
 	return 1;
 }
@@ -207,7 +239,9 @@ bool SetupVMCB(GuestState* GS){
 
 	GS->Vmcb->control.interceptMisc2 |= (1u << 0);// - vmrun
 	GS->Vmcb->control.interceptMisc2 |= (1u << 1);// - vmmcall
-	
+
+	GS->Vmcb->control.interceptMisc1 |= (1u << 18);// - cpuid
+
 	GS->Vmcb->control.guestASID = 1;
 
 	void* msrpm = MmAllocateContiguousMemory(2 * PAGE_SIZE, MaxAddress);

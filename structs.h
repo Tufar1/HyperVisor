@@ -42,7 +42,8 @@ struct VmcbControlArea {
     uint64_t exitInfo2;                // 0x080
     uint8_t  reserved5[0x8];           // 0x088 - 0x08F
     uint64_t npEnable;                 // 0x090 
-    uint8_t  reserved6[0x18];          // 0x098 - 0x0AF
+    uint8_t  reserved6[0x10];          // 0x098 - 0x0A8
+		uint64_t eventinj;								 // 0x0AE
     uint64_t nCr3;                     // 0x0B0
     uint8_t  reserved7[0x10];          // 0x0B8 - 0x0C7
     uint64_t nRIP;                     // 0x0C8
@@ -122,7 +123,7 @@ struct NptBreakpoint {
 };
 
 struct BreakpointHit{
-	bool newHit;
+	volatile bool newHit;
   ULONG64 Rax;
   ULONG64 Rcx;
   ULONG64 Rdx;

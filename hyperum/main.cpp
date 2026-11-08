@@ -50,17 +50,6 @@ int test(int a, int b){
 }
 
 int main() {
-  DWORD coreCount = std::thread::hardware_concurrency(); 
-  for (DWORD i = 0; i < coreCount; i++) {
-  	DWORD_PTR mask = 1ULL << i;
-
-  	SetThreadAffinityMask(GetCurrentThread(), mask);
-    Sleep(100);      
-    vmmcall(0,0);
-  }
-  
-	SetThreadAffinityMask(GetCurrentThread(), (1ULL << coreCount) - 1);
-
 	auto sharedAddress = VirtualAlloc(nullptr, 0x1000, MEM_COMMIT | MEM_RESERVE,PAGE_READWRITE);
 	printf("Allocated on: 0x%llX\n", sharedAddress);
 
@@ -114,9 +103,9 @@ int main() {
       printf("RSP: %llx  RBP: %llx  RSI: %llx  RDI: %llx\n", regs->Rsp, regs->Rbp, regs->Rsi, regs->Rdi);
       printf("R8:  %llx  R9:  %llx  R10: %llx  R11: %llx\n", regs->R8,  regs->R9,  regs->R10, regs->R11);
       printf("R12: %llx  R13: %llx  R14: %llx  R15: %llx\n", regs->R12, regs->R13, regs->R14, regs->R15);
+    	printf("Hit enter for unblock\n");
+			system("pause");
       regs->newHit = 0;
-    	Sleep(2000);
-    	vmmcall(0x420090, 0);
 		}
     Sleep(1);
 	}
