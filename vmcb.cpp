@@ -11,8 +11,9 @@ void InjectEvent(Vmcb* Vmcb, uint64_t Vector, uint64_t Type, bool EV, bool Valid
 }
 
 extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
+	uint64_t hostEnter = __rdtsc();
 	svm_vmload(reinterpret_cast<void*>(HostStatePA));
-
+	
 	auto ExitCode = Vmcb->control.exitCode;
 	auto Info1 = Vmcb->control.exitInfo1;
 	auto Info2 = Vmcb->control.exitInfo2;
@@ -152,13 +153,13 @@ extern "C" int HandleExit(GuestContext* ctx, Vmcb* Vmcb, uint64_t HostStatePA) {
 
 				while(!regs->newHit){}
       }
-			
+
       SetNX(faultRIPPA, 0);
       Vmcb->control.tlbControl = 1;
-			Vmcb->state.rflags |= (1 << 8); 
+			Vmcb->state.rflags |= (1 << 8);
     }
 	}
-
+	
 	if(ExitCode == 0x41){
 		for(int i = 0; i < breakpointCount; i++){
 			SetNX(breakpoints[i].guestPA, 1);
@@ -172,6 +173,10 @@ FINISH:
 
 	if (Vmcb->control.nRIP)
     Vmcb->state.rip = Vmcb->control.nRIP;
+
+	uint64_t hostExit = __rdtsc();
+	uint64_t offset = hostExit - hostEnter;
+	Vmcb->control.tscOffset -= 4000;
 
 	return 1;
 }

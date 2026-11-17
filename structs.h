@@ -33,7 +33,7 @@ struct VmcbControlArea {
     uint8_t  reserved2[0x2C];          // 0x014 - 0x03F
     uint64_t iopmBasePA;               // 0x040
     uint64_t msrpmBasePA;              // 0x048
-    uint8_t  reserved3[0x08];          // 0x050
+		uint64_t tscOffset;								 // 0x050
     uint32_t guestASID;                // 0x058
     uint32_t tlbControl;               // 0x05C
     uint8_t  reserved4[0x10];          // 0x060 - 0x06F
@@ -49,7 +49,9 @@ struct VmcbControlArea {
     uint64_t nRIP;                     // 0x0C8
     uint8_t  reserved8[0x330];         // 0x0D0 - 0x3FF
 };
+
 static_assert(sizeof(VmcbControlArea) == 0x400, "Control Area size mismatch");
+static_assert(offsetof(VmcbControlArea, tscOffset) == 0x50, "spatny offset TSC_OFFSET");
 
 struct VmcbStateArea {
     VmcbSegment es;                    // 0x000
